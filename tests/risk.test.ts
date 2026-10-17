@@ -51,8 +51,8 @@ describe("risk engine", () => {
       }),
     );
     expect(r.level).toBe("alert");
-    expect(r.summary).toBe("fall detected 2 min ago + missed a check-in + 310 m from your group");
-    expect(r.reasons.map((x) => x.code)).toEqual(["fall", "missed_checkin", "away_from_group"]);
+    expect(r.summary).toBe("missed a check-in + fall detected 2 min ago + 310 m from your group");
+    expect(r.reasons.map((x) => x.code)).toEqual(["missed_checkin", "fall", "away_from_group"]);
   });
 
   test("a coherent check-in clears earlier signals", () => {

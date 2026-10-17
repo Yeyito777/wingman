@@ -32,7 +32,7 @@ export const WATCH_AT = 25;
 export const ALERT_AT = 60;
 
 export const WEIGHTS = {
-  fall: 35,
+  fall: 30,
   stillness: 15,
   missedOne: 35,
   missedMany: 60,

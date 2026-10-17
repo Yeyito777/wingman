@@ -380,7 +380,8 @@ export class Session {
       checkins: this.checkins
         .filter((c) => c.status === "done" && c.outcome)
         .map((c) => ({ at: c.answeredAt ?? c.deadline, outcome: c.outcome!, impairment: c.result?.impairment ?? 1, reason: c.result?.reason ?? "" })),
-      localHour: new Date(now - this.tzOffset * 60_000).getUTCHours(),
+      // Demo sessions are pinned to 11 PM so the storyline plays out identically at any time of day.
+      localHour: this.demo ? 23 : new Date(now - this.tzOffset * 60_000).getUTCHours(),
     };
   }
 

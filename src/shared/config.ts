@@ -51,6 +51,9 @@ export const PROBE_PROMPTS: Record<string, string> = {
   fall: "Hey, that looked like a hard fall. Are you okay? Tell me where you are and who's with you.",
   away_from_group: "Hey, looks like you've drifted away from your group. Where are you headed, and who are you with?",
   stillness: "You've been really still for a while. Are you okay? Tell me where you are.",
+  impaired_checkin: "Let's try that again. Tell me slowly: where are you, and who's with you right now?",
+  missed_checkin: "Hey, I didn't hear you. Are you okay? Just tell me where you are.",
+  offline: "You went quiet for a bit. Are you okay? Tell me where you are.",
   alert: "Your buddies have been alerted. If you're okay, tell me where you are and who you're with.",
   default: "Hey, just checking on you. Where are you right now, and who are you with?",
 };
