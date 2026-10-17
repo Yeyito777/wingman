@@ -47,15 +47,62 @@ async function phoneContext() {
   return page;
 }
 
+/**
+ * Layout guards, run in every frame (the stage view embeds the buddy page in an iframe):
+ *  - nothing may scroll sideways (page or any visible overlay);
+ *  - on a visible full-screen overlay (alarm takeover, bystander mode, check-in), its headline, reasons and buttons
+ *    must be the topmost element at sampled points, so no map/pane/control can float over them;
+ *  - headlines must not be clipped.
+ */
+async function layoutProblems(page: Page): Promise<string[]> {
+  const out: string[] = [];
+  for (const frame of page.frames()) {
+    const found = await frame
+      .evaluate(() => {
+        const problems: string[] = [];
+        const label = (el: Element) => `${el.tagName.toLowerCase()}${el.id ? "#" + el.id : ""}${el.className && typeof el.className === "string" ? "." + el.className.trim().split(/\s+/).join(".") : ""}`;
+        for (const el of [document.documentElement, ...document.querySelectorAll<HTMLElement>(".overlay:not(.hidden)")]) {
+          if (el.scrollWidth > el.clientWidth + 1) problems.push(`horizontal overflow ${label(el)} ${el.scrollWidth}>${el.clientWidth}`);
+        }
+        // Hit-testing skips pointer-events:none layers (Leaflet tiles!), so force them on to match paint order.
+        const force = document.createElement("style");
+        force.textContent = "*, *::before, *::after { pointer-events: auto !important; }";
+        document.head.append(force);
+        for (const ov of document.querySelectorAll<HTMLElement>(".overlay:not(.hidden)")) {
+          const targets = ov.querySelectorAll<HTMLElement>(".big, .warn, .q, .reasons li, .call911, .verdict, button, a.btn");
+          for (const t of targets) {
+            const r = t.getBoundingClientRect();
+            if (r.width < 4 || r.height < 4 || getComputedStyle(t).visibility === "hidden") continue;
+            // 7x3 grid of sample points across the element (inset 4 px from the border).
+            const pts: [number, number][] = [];
+            for (let i = 0; i < 7; i++) for (let j = 0; j < 3; j++) pts.push([r.left + 4 + ((r.width - 8) * i) / 6, r.top + 4 + ((r.height - 8) * j) / 2]);
+            for (const [x, y] of pts) {
+              if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue; // scrolled out of view
+              const hit = document.elementFromPoint(x, y);
+              if (hit?.closest(".modal")) continue; // an intentional dialog (PIN pad) on top is fine
+              if (hit && !t.contains(hit) && !hit.contains(t)) {
+                problems.push(`${label(hit)} covers ${label(t)} "${(t.textContent ?? "").trim().slice(0, 30)}" at ${Math.round(x)},${Math.round(y)}`);
+                break;
+              }
+            }
+          }
+          for (const h of ov.querySelectorAll<HTMLElement>(".big, .warn")) {
+            if (h.scrollWidth > h.clientWidth + 1) problems.push(`headline clipped ${label(h)} ${h.scrollWidth}>${h.clientWidth}`);
+          }
+        }
+        force.remove();
+        return problems;
+      })
+      .catch((e) => [`guard failed to run: ${String(e?.message ?? e).slice(0, 200)}`]);
+    out.push(...found.map((p) => (frame === page.mainFrame() ? p : `[iframe] ${p}`)));
+  }
+  return out;
+}
+
 const shot = async (page: Page, name: string) => {
   await page.waitForTimeout(400);
-  // Layout guard: nothing may scroll sideways (page or any visible overlay).
-  const overflow = await page.evaluate(() =>
-    [document.documentElement, ...document.querySelectorAll<HTMLElement>(".overlay:not(.hidden)")]
-      .filter((el) => el.scrollWidth > el.clientWidth + 1)
-      .map((el) => `${el.id || el.tagName} ${el.scrollWidth}>${el.clientWidth}`),
-  );
-  if (overflow.length) errors.push(`${name}: horizontal overflow ${overflow.join(", ")}`);
+  const problems = await layoutProblems(page);
+  if (problems.length) errors.push(...problems.map((p) => `${name}: ${p}`));
   await page.screenshot({ path: `${OUT}/${name}.png` });
   console.log(`  saved ${OUT}/${name}.png`);
 };
@@ -176,6 +223,13 @@ try {
   await frame.locator("#tclose").click();
   await stagePage.waitForTimeout(2500);
   await shot(stagePage, "17-stage-view-dashboard");
+
+  // 11. Projector at 1080p: escalate to level 2 so the takeover returns, and check it again at full width.
+  await stagePage.setViewportSize({ width: 1920, height: 1080 });
+  await fetch(`${app.url}/api/s/${r.id}/demo/escalate`, { method: "POST", headers: { "x-wingman-key": r.userKey, "content-type": "application/json" }, body: "{}" });
+  await frame.locator("#takeover:not(.hidden)").waitFor({ timeout: 5000 });
+  await stagePage.waitForTimeout(800);
+  await shot(stagePage, "18-stage-view-1080p-alert");
 } finally {
   await browser.close();
   app.stop();

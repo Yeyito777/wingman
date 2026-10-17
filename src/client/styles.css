@@ -143,7 +143,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .log .privacy { color: #93c5fd; }
 
 /* ---------- overlays ---------- */
-.overlay { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; overflow: auto; }
+.overlay { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; overflow: auto; }
 
 .checkin-ov { background: radial-gradient(120% 90% at 50% 10%, #2e1065 0%, #0b0716 70%); padding: 28px 22px; text-align: center; justify-content: center; }
 .checkin-ov .q { font-size: 30px; font-weight: 900; line-height: 1.2; letter-spacing: -0.02em; margin: 18px 0; }
@@ -155,7 +155,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 
 .bystander { background: #b91c1c; color: white; padding: 22px 18px 28px; text-align: center; animation: flash 0.7s steps(1) infinite; }
 @keyframes flash { 50% { background: #f8fafc; color: #7f1d1d; } }
-.bystander .warn { font-size: 46px; font-weight: 1000; line-height: 1.02; letter-spacing: -0.03em; text-transform: uppercase; margin: 6px 0 10px; }
+.bystander .warn { font-size: clamp(38px, 11vw, 72px); font-weight: 1000; line-height: 1.02; letter-spacing: -0.03em; text-transform: uppercase; margin: 6px 0 10px; }
 .bystander .who { font-size: 21px; font-weight: 800; }
 .bystander .panel { background: #0b0f19; color: var(--text); border-radius: 18px; padding: 14px 16px; text-align: left; margin-top: 14px; animation: none; }
 .bystander .panel h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: #fca5a5; }
@@ -172,7 +172,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .pindots { display: flex; gap: 14px; justify-content: center; margin: 14px 0; }
 .pindots i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #e5e7eb; }
 .pindots i.on { background: #e5e7eb; }
-.modal { position: fixed; inset: 0; z-index: 80; background: #000c; display: grid; place-items: center; padding: 18px; }
+.modal { position: fixed; inset: 0; z-index: 1100; background: #000c; display: grid; place-items: center; padding: 18px; }
 .modal .sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 20px; width: 100%; max-width: 380px; text-align: center; }
 
 /* ---------- map ---------- */
@@ -189,8 +189,8 @@ button:disabled { opacity: 0.5; cursor: default; }
 .copy { font-family: ui-monospace, monospace; font-size: 13px; word-break: break-all; color: var(--muted); }
 .sms { background: #0b1120; border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; font-size: 15px; }
 .sms .meta { font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
-.toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: #111827; border: 1px solid var(--line); padding: 12px 18px; border-radius: 14px; z-index: 100; font-weight: 700; box-shadow: 0 10px 30px #000a; }
-.conn { position: fixed; top: 0; left: 0; right: 0; background: #78350f; color: #fde68a; text-align: center; font-size: 13px; font-weight: 700; padding: 4px; z-index: 120; }
+.toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: #111827; border: 1px solid var(--line); padding: 12px 18px; border-radius: 14px; z-index: 1200; font-weight: 700; box-shadow: 0 10px 30px #000a; }
+.conn { position: fixed; top: 0; left: 0; right: 0; background: #78350f; color: #fde68a; text-align: center; font-size: 13px; font-weight: 700; padding: 4px; z-index: 1300; }
 
 /* ---------- overflow guards (grid/flex children must be allowed to shrink) ---------- */
 .grid2 > *, .ladder > *, .sensors > *, #cols > *, .overlay > * { min-width: 0; }
@@ -212,6 +212,11 @@ button:disabled { opacity: 0.5; cursor: default; }
   .buddy-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 16px; align-items: start; }
   .buddy-cols > .stack + .stack { margin-top: 0; }
   .buddy-wrap .map { height: 380px; }
-  .alert-ov .big { font-size: 64px; }
   .alert-ov .reasons li { font-size: 24px; }
 }
+
+/* ---------- stacking ---------- */
+/* Leaflet gives its panes/controls z-index 400-1000; isolate the map so they can never escape above overlays. */
+.map { position: relative; z-index: 0; isolation: isolate; }
+/* Alarm headline scales with the viewport: two lines on a phone, one line on a projector (940 px iframe → 1080p). */
+.alert-ov .big { font-size: clamp(36px, 6vw, 76px); overflow-wrap: break-word; }
