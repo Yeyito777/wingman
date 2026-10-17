@@ -186,6 +186,17 @@ describe("end-to-end demo storyline", () => {
     phone.ws.close();
   });
 
+  test("'real audio' demo answers stay safe offline: if no AI can hear the clip, the script decides", async () => {
+    const { id, userKey } = await newSession();
+    await call(`/api/s/${id}/settings`, userKey, { demoAnswerMode: "live" });
+    await call(`/api/s/${id}/demo/slurred`, userKey, { delayMs: 0, wait: true });
+    const v = (await call(`/api/s/${id}`, userKey)).body as SessionView;
+    const c = v.checkins.find((x) => x.result)!;
+    expect(c.result!.engine).toBe("mock");
+    expect(c.outcome).toBe("impaired"); // not "ok", which would silently cancel the demo's alert
+    await call(`/api/s/${id}/end`, userKey, {});
+  });
+
   test("privacy: with 'only on alert' sharing, buddies can't see location until an alert", async () => {
     const { id, userKey, inviteKey } = await newSession({ shareLocation: "alert" });
     await call(`/api/s/${id}/signal`, userKey, { hb: true, fix: { lat: 43.78446, lng: -79.18747, accuracy: 10 } });

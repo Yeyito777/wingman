@@ -1,7 +1,7 @@
 // The person's phone: setup + consent, passive sensing, AI voice check-ins, and bystander mode.
 
 import type { Checkin, SessionView } from "../shared/types.ts";
-import { $, ago, api, chime, connect, copyText, esc, loopSound, qrImg, speak, successChime, toast, unlockAudio } from "./common.ts";
+import { $, ago, api, chime, connect, copyText, engineLabel, esc, loopSound, qrImg, speak, successChime, toast, unlockAudio } from "./common.ts";
 import { batteryLevel, keepAwake, recordReply, requestMic, requestMotionPermission, startFallDetector, watchLocation, type Recording } from "./sensors.ts";
 
 const LS_SESSION = "wingman.session";
@@ -354,7 +354,7 @@ function renderLastCheck(v: SessionView) {
   el.innerHTML = `<h2>Last check-in · ${ago(c.answeredAt ?? c.deadline)}</h2>
     <div style="font-weight:800;color:${color};font-size:19px">${label}</div>
     ${c.result?.transcript ? `<div style="margin-top:6px">“${esc(c.result.transcript)}”</div>` : ""}
-    ${c.result ? `<div class="small muted" style="margin-top:6px">${esc(c.result.reason)} · ${esc(c.result.engine)}${c.result.model ? ` (${esc(c.result.model)})` : ""}</div>` : ""}`;
+    ${c.result ? `<div class="small muted" style="margin-top:6px">${esc(c.result.reason)} · ${esc(engineLabel(c.result))}</div>` : ""}`;
 }
 
 function renderDemoCard(v: SessionView) {
@@ -509,7 +509,7 @@ function showVerdict(c: Checkin, v: SessionView) {
     html = `<div class="verdict" style="color:#fca5a5">No answer. I'm letting your buddies know.</div>`;
     setPhase("");
   }
-  $("#cverdict").innerHTML = html + (r ? `<div class="small" style="margin-top:8px;color:#c4b5fd">${esc(r.engine)}${r.model ? ` · ${esc(r.model)}` : ""} · ${r.latencyMs} ms</div>` : "");
+  $("#cverdict").innerHTML = html + (r ? `<div class="small" style="margin-top:8px;color:#c4b5fd">${esc(engineLabel(r))}${r.latencyMs ? ` · ${r.latencyMs} ms` : ""}</div>` : "");
   st.verdictTimer = setTimeout(() => ov.classList.add("hidden"), c.outcome === "ok" ? 3500 : 4500);
   if (v.stage >= 2) ov.classList.add("hidden");
 }

@@ -24,8 +24,12 @@ if Gemini is down, the scorer falls back and the answer still counts as OK.
    - Volume **max**. iPhone: ring/silent switch **off**, and Settings › Display › Auto-Lock **Never**
      (iOS pauses web pages when the screen locks).
 5. **Laptop volume up.** The alarm is part of the show.
-6. In the stage view press **Shift+R** (reset) so the log starts clean.
-7. Rehearse once end to end, then Shift+R again. (`bun run rehearse` runs the same storyline headless as a sanity check.)
+6. **Optional, recommended if the Wi-Fi is decent:** in the demo panel set **Scripted answers → Real audio → AI**.
+   Step ④'s slurred clip is then scored by **Gemini for real** (~2 s, labelled "Gemini" on screen, cached after the
+   first run). It stays safe: if every AI engine fails, the offline fallback scores the script (impaired), so the alert
+   still fires. With the default "Canned text" it's labelled "scripted demo answer".
+7. In the stage view press **Shift+R** (reset) so the log starts clean.
+8. Rehearse once end to end, then Shift+R again. (`bun run rehearse` runs the same storyline headless as a sanity check.)
 
 > Tip: if the phone page reloads, it shows **Tap to start guarding**. Tap it, since iOS needs a tap to re-enable the
 > sensors and sound.

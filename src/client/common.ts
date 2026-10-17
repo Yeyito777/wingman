@@ -21,6 +21,13 @@ export function patch(el: HTMLElement | null, html: string, bind?: () => void) {
   return true;
 }
 
+/** Honest, judge-friendly label for which engine scored a check-in. */
+export function engineLabel(r: { engine: string; model?: string; fallbackFrom?: string }): string {
+  if (r.model === "demo script") return "scripted demo answer";
+  if (r.engine === "mock") return r.fallbackFrom ? "offline fallback" : "offline heuristic";
+  return `${r.engine === "gemini" ? "Gemini" : "OpenAI"}${r.model ? ` · ${r.model}` : ""}`;
+}
+
 export function esc(s: unknown): string {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }

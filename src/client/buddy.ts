@@ -1,7 +1,7 @@
 // Buddy dashboard: live status, map, reasons, the escalation ladder, and a loud alert takeover.
 
 import type { SessionView } from "../shared/types.ts";
-import { $, ago, api, connect, esc, fmtM, loopSound, patch, renderLog, successChime, toast, unlockAudio } from "./common.ts";
+import { $, ago, api, connect, engineLabel, esc, fmtM, loopSound, patch, renderLog, successChime, toast, unlockAudio } from "./common.ts";
 import { createMap } from "./map.ts";
 import { watchLocation } from "./sensors.ts";
 
@@ -176,7 +176,7 @@ function onView(v: SessionView) {
           ? `<div style="font-weight:800;color:#c4b5fd">🧠 Analyzing ${name}'s reply…</div>`
           : `<div style="font-weight:900;font-size:19px;color:${c.outcome === "ok" ? "var(--ok)" : "var(--alert)"}">${c.outcome === "ok" ? "✓ Sounded clear" : c.outcome === "impaired" ? `⚠ Sounded impaired (${Math.round((c.result?.impairment ?? 0) * 100)}%)` : "✕ No answer"}</div>
              ${c.result?.transcript ? `<div style="margin-top:6px">“${esc(c.result.transcript)}”</div>` : ""}
-             ${c.result ? `<div class="small muted" style="margin-top:6px">${esc(c.result.reason)}${c.result.signs.length ? ` · ${c.result.signs.map(esc).join(", ")}` : ""} · ${esc(c.result.engine)}</div>` : ""}`
+             ${c.result ? `<div class="small muted" style="margin-top:6px">${esc(c.result.reason)}${c.result.signs.length ? ` · ${c.result.signs.map(esc).join(", ")}` : ""} · ${esc(engineLabel(c.result))}</div>` : ""}`
   }`;
 
   // Level-3 notifications

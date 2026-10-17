@@ -1,7 +1,7 @@
 // Demo control panel: drive the on-stage storyline deterministically, watch the engine's state live.
 
 import type { SessionView } from "../shared/types.ts";
-import { $, ago, api, connect, copyText, esc, fmtM, patch, qrImg, renderLog, toast } from "./common.ts";
+import { $, ago, api, connect, copyText, engineLabel, esc, fmtM, patch, qrImg, renderLog, toast } from "./common.ts";
 
 const app = $("#app");
 const id = location.pathname.split("/")[2] ?? "";
@@ -121,7 +121,7 @@ function onView(v: SessionView) {
       ? `<div class="muted">None yet.</div>`
       : `<div><b>${esc(c.status === "done" ? c.outcome ?? "cancelled" : c.status)}</b> · ${esc(c.trigger)} · asked ${ago(c.askedAt)}</div>
          <div class="small muted" style="margin-top:4px">“${esc(c.prompt)}”</div>
-         ${c.result ? `<div style="margin-top:8px">“${esc(c.result.transcript)}”</div><div class="small" style="margin-top:4px;color:#c4b5fd">impairment ${Math.round(c.result.impairment * 100)}% · ${esc(c.result.reason)} · ${esc(c.result.engine)}${c.result.model ? ` (${esc(c.result.model)})` : ""} · ${c.result.latencyMs} ms${c.result.fallbackFrom ? ` · fell back from ${esc(c.result.fallbackFrom)}` : ""}</div>` : ""}`
+         ${c.result ? `<div style="margin-top:8px">“${esc(c.result.transcript)}”</div><div class="small" style="margin-top:4px;color:#c4b5fd">impairment ${Math.round(c.result.impairment * 100)}% · ${esc(c.result.reason)} · ${esc(engineLabel(c.result))} · ${c.result.latencyMs} ms${c.result.fallbackFrom ? ` · fell back from ${esc(c.result.fallbackFrom)}` : ""}</div>` : ""}`
   }`;
   const n = v.notifications.at(-1);
   $("#smscard").innerHTML = `<h2>Level 3 · emergency contact</h2>${n ? `<div class="sms"><div class="meta">${n.channel.toUpperCase()} → ${esc(n.toName)} ${esc(n.to)} · ${n.simulated ? "SIMULATED" : n.ok ? "SENT (Twilio)" : "FAILED"}</div>${esc(n.body)}</div>` : `<div class="muted">Nothing sent. ${esc(v.user.contactName)} ${esc(v.user.contactPhone)} gets an ${v.engines.notifier === "twilio" ? "SMS via Twilio" : "SMS (simulated)"} at level 3.</div>`}`;

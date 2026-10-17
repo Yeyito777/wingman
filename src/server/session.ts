@@ -249,6 +249,7 @@ export class Session {
     this.log("checkin", `${this.user.name} answered (${ans.source}); scoring the reply…`, c.answeredAt);
     this.hooks.broadcast(this);
     const req: ScoreRequest = { question: c.prompt, name: this.user.name, audio: ans.audio, text: ans.text };
+    // (When both audio and text are present, AI engines listen to the audio; the offline heuristic reads the text.)
     let result: CheckinResult;
     if (ans.canned) {
       result = { ...mockScore(req), engine: "mock", model: "demo script", latencyMs: 0 };

@@ -251,7 +251,9 @@ export function startServer(opts: AppOptions = {}) {
               const run = async () => {
                 if (live) {
                   const data = new Uint8Array(await Bun.file(`${PUBLIC_DIR}demo-audio/${action}.wav`).arrayBuffer());
-                  await s.answerCheckin(id, { audio: { data, mime: "audio/wav" }, source: `demo audio: ${action}` });
+                  // The canned text rides along: AI engines score the audio, and if they all fail the offline
+                  // fallback scores the script instead of treating unheard audio as a clear answer.
+                  await s.answerCheckin(id, { audio: { data, mime: "audio/wav" }, text: CANNED[action], source: `demo audio: ${action}` });
                 } else {
                   await s.answerCheckin(id, { text: CANNED[action], source: `demo script: ${action}`, canned: true });
                 }
