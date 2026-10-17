@@ -1,6 +1,6 @@
 // Sounds, haptics and local notifications. Every call is safe to repeat and safe on web (best effort).
 
-import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from "expo-audio";
+import { createAudioPlayer, setAudioModeAsync, setIsAudioActiveAsync, type AudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import * as Notifications from "expo-notifications";
 import { AppState, Platform } from "react-native";
@@ -12,33 +12,55 @@ const SOURCES: Record<Sound, number> = {
   chime: require("../../assets/sounds/chime.wav"),
 };
 
+/** Length of the check-in chime (assets/sounds/chime.wav). */
+const CHIME_MS = 900;
+
 const players: Partial<Record<Sound, AudioPlayer>> = {};
 let hapticTimer: ReturnType<typeof setInterval> | null = null;
-let modeSet = false;
+let modeRecording: boolean | null = null;
 
-async function ensureMode() {
-  if (modeSet) return;
-  modeSet = true;
+/**
+ * The app's single audio mode; `recording` only during a check-in answer. Always pass every field: expo-audio resets
+ * omitted ones to defaults, and the ring/silent switch must not mute an emergency (or the spoken check-in).
+ */
+export async function audioMode(recording: boolean) {
+  if (modeRecording === recording) return;
   try {
-    // Ring/silent switch must not mute an emergency.
-    await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: "doNotMix", allowsRecording: false });
+    await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: "doNotMix", allowsRecording: recording });
+    modeRecording = recording;
   } catch {}
 }
 
+/** Before speaking: playback mode and an active session (another app or a call may have taken it meanwhile). */
+export async function prepareForSpeech() {
+  modeRecording = null; // re-assert the category even if we think it's set: iOS may have changed it under us
+  await audioMode(false);
+  await setIsAudioActiveAsync(true).catch(() => {});
+}
+
 function player(s: Sound) {
-  if (!players[s]) players[s] = createAudioPlayer(SOURCES[s]);
+  // keepAudioSessionActive: by default expo-audio deactivates the shared AVAudioSession ~100 ms after a sound ends
+  // or pauses, and that kills whatever else is playing through it: it cut the spoken check-in question off right
+  // after the 0.9 s chime. The session stays active while the app runs.
+  if (!players[s]) players[s] = createAudioPlayer(SOURCES[s], { keepAudioSessionActive: true });
   return players[s]!;
 }
 
 export async function play(s: Sound, loop = false) {
   try {
-    await ensureMode();
+    await audioMode(false);
     const p = player(s);
     p.loop = loop;
     p.volume = 1;
     await p.seekTo(0);
     p.play();
   } catch {}
+}
+
+/** The chime, resolving once it has finished, so speech never overlaps (or outlives) it. */
+export async function chimeAndWait() {
+  await play("chime");
+  await new Promise((r) => setTimeout(r, CHIME_MS + 150));
 }
 
 export function stop(s: Sound) {

@@ -3,13 +3,14 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import type { Checkin } from "@shared/protocol";
-import { RecordingPresets, setAudioModeAsync, useAudioRecorder } from "expo-audio";
+import { RecordingPresets, useAudioRecorder } from "expo-audio";
 import { File } from "expo-file-system";
 import * as Speech from "expo-speech";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { play, tap } from "../services/alarm";
+import { audioMode, chimeAndWait, play, tap } from "../services/alarm";
+import { speakFully } from "../services/voice";
 import { answerCheckin } from "../services/session";
 import { dispatch } from "../state/store";
 import { colors, font } from "../theme";
@@ -29,25 +30,26 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
   const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, numberOfChannels: 1, isMeteringEnabled: true });
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const alive = useRef(true);
+  const listening = useRef(false);
+  /** still speaking the question: false once the user taps the mic or types (then a stopped utterance isn't retried) */
+  const asking = useRef(true);
 
   useEffect(() => {
     alive.current = true;
+    asking.current = true;
     tap("warning");
-    play("chime");
-    const t = setTimeout(() => {
-      Speech.speak(checkin.prompt, {
-        rate: Platform.OS === "ios" ? 0.52 : 1,
-        onDone: () => {
-          if (alive.current) checkin.autoListen ? listen() : setPhase("ready");
-        },
-        onError: () => {
-          if (alive.current) setPhase("ready");
-        },
-      });
-    }, 500);
+    // Chime, then the whole question, then the mic: never overlapping (see services/voice.ts).
+    (async () => {
+      await chimeAndWait();
+      if (!alive.current) return;
+      const r = await speakFully(checkin.prompt, () => alive.current && asking.current);
+      if (!alive.current || !asking.current) return;
+      asking.current = false;
+      if (r === "done" && checkin.autoListen) listen();
+      else setPhase((p) => (p === "asking" ? "ready" : p));
+    })();
     return () => {
       alive.current = false;
-      clearTimeout(t);
       Speech.stop();
       stopTimer();
       if (recorder.isRecording) recorder.stop().catch(() => {});
@@ -61,13 +63,21 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
   };
 
   async function listen() {
+    if (listening.current) return;
+    listening.current = true;
+    asking.current = false;
     Speech.stop();
     try {
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await audioMode(true);
       await recorder.prepareToRecordAsync();
       recorder.record();
     } catch {
+      listening.current = false;
       setPhase("typing");
+      return;
+    }
+    if (!alive.current) {
+      recorder.stop().catch(() => {});
       return;
     }
     setPhase("listening");
@@ -91,9 +101,10 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
     stopTimer();
     setLevel(0);
     setPhase("thinking");
+    listening.current = false;
     try {
       await recorder.stop();
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      await audioMode(false);
       const uri = recorder.uri;
       if (!uri) throw new Error("no recording");
       const audio = await readBase64(uri);
@@ -127,6 +138,16 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
   }
 
   const close = () => dispatch({ type: "handleCheckin", id: checkin.id });
+
+  function typeInstead() {
+    asking.current = false;
+    Speech.stop();
+    stopTimer();
+    listening.current = false;
+    if (recorder.isRecording) recorder.stop().catch(() => {});
+    audioMode(false);
+    setPhase("typing");
+  }
 
   return (
     <View style={{ position: "absolute", inset: 0, backgroundColor: colors.bg }}>
@@ -183,7 +204,7 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
                 <T v="callout" color={colors.text2} center>
                   {phase === "asking" ? "Listen…" : phase === "ready" ? "Tap the mic and answer out loud" : phase === "listening" ? "Listening — tap when you're done" : "Checking your answer…"}
                 </T>
-                {phase !== "thinking" && <LinkButton title="Type instead" onPress={() => (stopTimer(), recorder.isRecording && recorder.stop().catch(() => {}), setPhase("typing"))} />}
+                {phase !== "thinking" && <LinkButton title="Type instead" onPress={typeInstead} />}
               </>
             )}
           </View>
