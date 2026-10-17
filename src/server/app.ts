@@ -242,7 +242,7 @@ export function startServer(opts: AppOptions = {}) {
               break;
             case "slurred":
             case "coherent": {
-              let c = s.pendingCheckin ?? s.askCheckin("manual", now);
+              let c = s.pendingCheckin ?? s.askCheckin("demo", now);
               if (!c || c.status !== "pending") return json({ error: "a check-in is already being scored" }, 409);
               afterAction(s);
               const delay = Math.max(0, Math.min(15_000, Number(b.delayMs ?? 2500)));
@@ -264,7 +264,7 @@ export function startServer(opts: AppOptions = {}) {
               return json({ ok: true, checkinId: id, mode: s.demoAnswerMode });
             }
             case "miss": {
-              const c = s.pendingCheckin ?? s.askCheckin("manual", now);
+              const c = s.pendingCheckin ?? s.askCheckin("demo", now);
               if (c && c.status === "pending") c.deadline = Math.min(c.deadline, now + Math.max(0, Number(b.afterMs ?? 3000)));
               break;
             }

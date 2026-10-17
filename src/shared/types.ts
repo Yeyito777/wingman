@@ -89,6 +89,9 @@ export interface Checkin {
   askedAt: number;
   deadline: number;
   status: "pending" | "scoring" | "done";
+  /** start recording automatically after asking (off for automatic check-ins in demo mode, so the
+   *  presenter's narration isn't recorded as the answer) */
+  autoListen: boolean;
   outcome?: CheckinOutcome;
   answeredAt?: number;
   result?: CheckinResult;

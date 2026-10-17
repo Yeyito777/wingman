@@ -21,7 +21,7 @@ export const REAL_TIMERS: Timers = {
 /** Accelerated timers so the whole ladder plays out inside a 4-minute pitch. */
 export const DEMO_TIMERS: Timers = {
   checkinEveryMs: 0, // periodic check-ins off on stage; the presenter triggers them
-  checkinTimeoutMs: 15 * S,
+  checkinTimeoutMs: 90 * S, // long enough that narration between storyline steps never turns into a "missed" check-in
   fallConfirmMs: 3 * S,
   fallWindowMs: 10 * MIN,
   stillnessMs: 10 * MIN,

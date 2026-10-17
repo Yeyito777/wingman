@@ -215,6 +215,7 @@ async function sendSignals(hb: boolean) {
   if (hb) {
     body.hb = true;
     body.battery = await batteryLevel();
+    body.sensors = st.sensors;
   }
   if (st.pending.motion) body.motion = true;
   if (st.pending.interaction) body.interaction = true;
@@ -409,7 +410,7 @@ async function runCheckin(c: Checkin, v: SessionView) {
     <div id="cverdict"></div>
     <div id="cactions" style="margin-top:22px">
       <button class="btn-primary btn-block hidden" id="cagain">🎙 Tap to answer</button>
-      <button class="btn-ghost btn-block" id="cstop" style="margin-top:10px">✓ Done talking</button>
+      <button class="btn-ghost btn-block hidden" id="cstop" style="margin-top:10px">✓ Done talking</button>
       <details style="margin-top:14px;text-align:left"><summary class="muted">Can't talk? Type instead</summary>
         <div class="row" style="margin-top:8px"><input id="ctext" placeholder="Where are you, who are you with?" /><button class="btn-primary" id="csend">Send</button></div>
       </details>
@@ -439,12 +440,18 @@ async function runCheckin(c: Checkin, v: SessionView) {
   setPhase("🔊 …");
   await speak(c.prompt);
   if (st.current?.id !== c.id) return;
+  if (!c.autoListen) {
+    setPhase("Tap to answer out loud");
+    $("#cagain").classList.remove("hidden");
+    return;
+  }
   listen(c);
 }
 
 async function listen(c: Checkin) {
   if (st.current?.id !== c.id) return;
   $("#cagain").classList.add("hidden");
+  $("#cstop").classList.remove("hidden");
   $("#cbars").classList.remove("hidden");
   setPhase("🎙 Listening… answer out loud");
   const bars = [...document.querySelectorAll<HTMLElement>("#cbars i")];
@@ -462,6 +469,7 @@ async function listen(c: Checkin) {
   const r = await rec.done.catch(() => null);
   if (st.current?.id !== c.id || st.view?.checkin?.id !== c.id || st.view.checkin.status !== "pending") return;
   $("#cbars").classList.add("hidden");
+  $("#cstop").classList.add("hidden");
   if (!r) {
     setPhase("Microphone unavailable: type your answer below");
     return;

@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { startServer } from "../src/server/app.ts";
 import { availableEngines } from "../src/server/scorer.ts";
+import { DEMO_TIMERS } from "../src/shared/config.ts";
 import type { SessionView } from "../src/shared/types.ts";
 
 let app: ReturnType<typeof startServer>;
@@ -94,6 +95,8 @@ describe("end-to-end demo storyline", () => {
     await call(`/api/s/${id}/demo/walk`, userKey, { durationMs: 300 });
     const probe = await until("suspicion check-in", () => phone.view?.checkin?.status === "pending" && phone.view.checkin);
     expect(probe.trigger).toBe("suspicion: away from group");
+    // On stage, automatic check-ins must not record the presenter's narration as the answer.
+    expect(probe.autoListen).toBe(false);
     expect(phone.view!.risk.reasons.map((r) => r.code)).toContain("away_from_group");
     expect(phone.view!.risk.level).toBe("watch");
 
@@ -172,6 +175,7 @@ describe("end-to-end demo storyline", () => {
     const phone = client(id, userKey);
     await until("connected", () => phone.view);
     const asked = await call(`/api/s/${id}/checkin`, userKey, {});
+    expect(asked.body.checkin.autoListen).toBe(true); // "Check in now" listens right away
     const wav = new Uint8Array(await Bun.file("public/demo-audio/coherent.wav").arrayBuffer());
     const r = await call(`/api/s/${id}/checkin/${asked.body.checkin.id}/answer`, userKey, wav, { "content-type": "audio/wav" });
     expect(r.status).toBe(200);
@@ -216,6 +220,11 @@ describe("end-to-end demo storyline", () => {
       live.stop();
     }
   }, 30_000);
+});
+
+test("demo pacing: a storyline check-in can't time out between clicker steps", () => {
+  // Step 2 (walk away) asks a check-in that step 4 answers ~35-45 s later while the presenter talks.
+  expect(DEMO_TIMERS.checkinTimeoutMs).toBeGreaterThanOrEqual(60_000);
 });
 
 describe("dead-man's switch", () => {

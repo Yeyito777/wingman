@@ -231,6 +231,7 @@ export class Session {
       askedAt: now,
       deadline: now + timeoutMs,
       status: "pending",
+      autoListen: !this.demo || trigger === "manual",
     };
     this.checkins.push(c);
     if (this.checkins.length > 30) this.checkins.shift();
