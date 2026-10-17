@@ -1,6 +1,6 @@
 // Shared browser helpers: API calls, the live session socket, sounds, formatting.
 
-import type { LogEvent, ServerMsg, SessionView } from "../shared/types.ts";
+import type { GroupView, LogEvent, ServerMsg } from "../shared/types.ts";
 
 // PWA manifest (added at runtime: the HTML bundler would try to resolve an absolute href).
 if (!document.querySelector('link[rel="manifest"]')) {
@@ -38,7 +38,7 @@ export async function api<T = any>(path: string, key: string, body?: unknown, in
     method: body === undefined ? "GET" : "POST",
     ...init,
     headers: {
-      "x-wingman-key": key,
+      ...(key ? { authorization: `Bearer ${key}` } : {}),
       ...(body !== undefined && !isRaw ? { "content-type": "application/json" } : {}),
       ...(init.headers ?? {}),
     },
@@ -49,8 +49,8 @@ export async function api<T = any>(path: string, key: string, body?: unknown, in
   return data as T;
 }
 
-/** Live session view over WebSocket with automatic reconnect. */
-export function connect(opts: { id: string; key: string; buddyId?: string; as?: string; onView: (v: SessionView) => void; onEnded: () => void }) {
+/** Live group view over WebSocket with automatic reconnect. memberId omitted = stage/observer view. */
+export function connect(opts: { code: string; key: string; memberId?: string; onView: (v: GroupView) => void; onMsg?: (m: ServerMsg) => void; onEnded: (reason: string) => void }) {
   let ws: WebSocket | null = null;
   let tries = 0;
   let closed = false;
@@ -60,9 +60,8 @@ export function connect(opts: { id: string; key: string; buddyId?: string; as?: 
   document.body.append(banner);
   const open = () => {
     const proto = location.protocol === "https:" ? "wss" : "ws";
-    const q = new URLSearchParams({ s: opts.id, k: opts.key });
-    if (opts.buddyId) q.set("b", opts.buddyId);
-    if (opts.as) q.set("as", opts.as);
+    const q = new URLSearchParams({ g: opts.code, k: opts.key });
+    if (opts.memberId) q.set("m", opts.memberId);
     ws = new WebSocket(`${proto}://${location.host}/ws?${q}`);
     ws.onopen = () => {
       tries = 0;
@@ -70,30 +69,34 @@ export function connect(opts: { id: string; key: string; buddyId?: string; as?: 
     };
     ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data) as ServerMsg;
-      if (msg.t === "view") {
+      if (msg.t === "view" || msg.t === "hello") {
         clock.sync(msg.view.now);
         opts.onView(msg.view);
-      } else if (msg.t === "ended") {
+      } else if (msg.t === "ended" || msg.t === "left") {
         closed = true;
-        opts.onEnded();
+        opts.onEnded(msg.t === "ended" ? msg.reason : "you left the group");
       }
+      opts.onMsg?.(msg);
     };
     ws.onclose = async () => {
       if (closed) return;
       banner.classList.remove("hidden");
-      // Session gone? (server restarted or ended) -> stop retrying.
-      const r = await fetch(`/api/s/${opts.id}`, { headers: { "x-wingman-key": opts.key } }).catch(() => null);
+      // Group gone? (server restarted or night ended) -> stop retrying.
+      const r = await fetch(`/api/groups/${opts.code}`).catch(() => null);
       if (r && r.status === 404) {
         closed = true;
         banner.classList.add("hidden");
-        opts.onEnded();
+        opts.onEnded("the night has ended");
         return;
       }
       setTimeout(open, Math.min(5000, 400 * 2 ** tries++));
     };
   };
   open();
-  return { close: () => ((closed = true), ws?.close()) };
+  return {
+    send: (m: unknown) => ws?.readyState === WebSocket.OPEN && ws.send(JSON.stringify(m)),
+    close: () => ((closed = true), ws?.close()),
+  };
 }
 
 /** Server-clock offset so "2 min ago" and countdowns are right on every device. */
