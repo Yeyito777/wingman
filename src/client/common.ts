@@ -1,6 +1,9 @@
 // Shared browser helpers: API calls, the live session socket, sounds, formatting.
 
 import type { GroupView, LogEvent, ServerMsg } from "../shared/types.ts";
+import { esc, fmtM } from "./format.ts";
+
+export { esc, fmtM };
 
 // PWA manifest (added at runtime: the HTML bundler would try to resolve an absolute href).
 if (!document.querySelector('link[rel="manifest"]')) {
@@ -28,9 +31,6 @@ export function engineLabel(r: { engine: string; model?: string; fallbackFrom?: 
   return `${r.engine === "gemini" ? "Gemini" : "OpenAI"}${r.model ? ` · ${r.model}` : ""}`;
 }
 
-export function esc(s: unknown): string {
-  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-}
 
 export async function api<T = any>(path: string, key: string, body?: unknown, init: RequestInit = {}): Promise<T> {
   const isRaw = body instanceof Blob || body instanceof Uint8Array || body instanceof ArrayBuffer;
@@ -123,10 +123,6 @@ export function hhmmss(t: number) {
   return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-export function fmtM(m: number | null | undefined) {
-  if (m === null || m === undefined) return "—";
-  return m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`;
-}
 
 export function renderLog(el: HTMLElement, events: LogEvent[]) {
   el.innerHTML = [...events]

@@ -453,10 +453,10 @@ export class Group {
     }
     if (m.simulated) {
       if (!this.venue) return null;
-      // Mill around within a few metres of the venue, each friend on their own little circle.
+      // Mill around a few tens of metres from the venue (clear of the phone's pin there), each on their own circle.
       const i = [...this.members.keys()].indexOf(m.id);
       const angle = (i * 120 + (now / 1000) * 2) % 360;
-      return { ...offset(this.venue, 12 + (i % 4) * 9, angle), accuracy: 10, at: now };
+      return { ...offset(this.venue, 24 + (i % 4) * 12, angle), accuracy: 10, at: now };
     }
     return m.realFix;
   }

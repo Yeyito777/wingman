@@ -33,23 +33,37 @@ try {
   const hb = setInterval(beat, 2000);
   await page.waitForTimeout(3000);
   await page.screenshot({ path: `${OUT}/1-stage-calm.png` });
-  await page.mouse.click(640, 30);
-  await page.keyboard.press("ArrowRight"); // check-in
-  await page.waitForTimeout(1200);
+  await page.mouse.click(640, 30); // arms sound (header)
+  const expectText = async (sel: string, text: string, ms = 15000) => {
+    await page.waitForFunction(([s, t]) => [...document.querySelectorAll(s!)].some((e) => e.textContent?.includes(t!)), [sel, text], { timeout: ms }).catch(() => errors.push(`expected "${text}" in ${sel}`));
+  };
+  await page.click('.dk-steps li[data-step="0"]'); // clicking the current step runs it
+  await expectText(".mcard", "Checking in");
+  await page.waitForTimeout(500);
   await page.screenshot({ path: `${OUT}/2-stage-checkin.png` });
-  await page.keyboard.press("ArrowRight"); // drift
-  await page.waitForTimeout(8500);
-  await page.keyboard.press("ArrowRight"); // fall
-  await page.waitForTimeout(800);
+  await page.click('.dk-steps li[data-step="2"]'); // clicking a later step runs everything up to it (drift, fall)
+  await expectText(".mcard", "WATCH");
+  await expectText(".dk-steps li.now", "Slurred");
+  await page.waitForTimeout(6000); // the drift walk finishes
   await page.screenshot({ path: `${OUT}/3-stage-watch.png` });
-  await post(`/api/groups/${d.code}/demo/slurred`, d.stageKey, { delayMs: 0, wait: true });
-  await page.waitForSelector(".st-alarm:not(.hidden)", { timeout: 8000 });
+  await page.click("#next"); // Next ▶: the slurred answer (clip plays, then lands)
+  await page.waitForSelector(".st-alarm:not(.hidden)", { timeout: 20000 });
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${OUT}/4-stage-alert.png` });
+  await page.keyboard.press("d"); // presenter details
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${OUT}/5-stage-alert-presenter.png` });
+  await page.click('.dk-steps li[data-step="5"]'); // Sam: on my way, then found & OK
+  await page.waitForSelector(".st-alarm.hidden", { state: "attached", timeout: 15000 }).catch(() => errors.push("alert not resolved by clicking the last step"));
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${OUT}/6-stage-resolved-presenter.png` });
   clearInterval(hb);
 } finally {
   await browser.close();
   app.stop();
 }
-if (errors.length) console.error("page errors:\n" + errors.join("\n"));
 console.log(`saved to ${OUT}`);
+if (errors.length) {
+  console.error("problems:\n" + errors.join("\n"));
+  process.exit(1);
+}
