@@ -153,7 +153,7 @@ const STORY: { label: string; hint: string; actions: string[] }[] = [
   { label: "🎙 Live check-in", hint: "Phone asks out loud. Answer clearly → Gemini: ✓", actions: ["checkin"] },
   { label: "🚶 Walk away from the group", hint: "Map: 350 m from the group. Phone asks where you're headed", actions: ["scene", "walk"] },
   { label: "💥 Fall detected", hint: "Impact + stillness", actions: ["fall"] },
-  { label: "🥴 Slurred answer", hint: "AI flags slurred speech → LEVEL 1. Then L2 siren, L3 SMS on timers", actions: ["slurred"] },
+  { label: "🥴 Slurred answer", hint: "Plays the slurred reply out loud, then → LEVEL 1. L2 siren and L3 SMS follow on timers", actions: ["slurred-aloud"] },
   { label: "🏃 Sam: \"I'm on my way\"", hint: "Visible on the phone and to every buddy", actions: ["ack"] },
   { label: "🔢 PIN on the phone", hint: "Enter 1234 on the bystander screen → resolved", actions: [] },
 ];
@@ -182,7 +182,25 @@ function stage() {
     if (step >= STORY.length) return;
     const s = STORY[step++]!;
     render();
-    for (const a of s.actions) await api(`/api/s/${id}/demo/${a}`, key, {}).catch((e) => toast(e.message));
+    for (const a of s.actions) {
+      if (a === "slurred-aloud") await slurredAloud();
+      else await api(`/api/s/${id}/demo/${a}`, key, {}).catch((e) => toast(e.message));
+    }
+  };
+  // Let the room hear "what I manage to say" (Gemini-TTS clip), then submit the answer as the clip ends.
+  const slurredAloud = async () => {
+    const clip = new Audio("/demo-audio/slurred.wav");
+    let delayMs = 2500;
+    try {
+      await new Promise<void>((res, rej) => {
+        clip.onloadedmetadata = () => res();
+        clip.onerror = () => rej(new Error("clip failed"));
+        setTimeout(() => rej(new Error("clip timeout")), 3000);
+      });
+      await clip.play();
+      delayMs = Math.min(14_000, Math.round(clip.duration * 1000) - 500);
+    } catch {}
+    await api(`/api/s/${id}/demo/slurred`, key, { delayMs }).catch((e) => toast(e.message));
   };
   const reset = async () => {
     if (!confirm("Reset the session for another run?")) return;

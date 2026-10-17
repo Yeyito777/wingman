@@ -169,8 +169,8 @@ try {
   await stagePage.waitForTimeout(1200);
   await stagePage.keyboard.press("PageDown"); // fall
   await stagePage.waitForTimeout(300);
-  await stagePage.keyboard.press(" "); // slurred answer (2.5 s scripted delay)
-  await frame.locator("#takeover:not(.hidden)").waitFor({ timeout: 8000 });
+  await stagePage.keyboard.press(" "); // slurred answer: clip plays aloud, answer lands as it ends
+  await frame.locator("#takeover:not(.hidden)").waitFor({ timeout: 16000 });
   await stagePage.waitForTimeout(500);
   await shot(stagePage, "16-stage-view-alert");
   await frame.locator("#tclose").click();

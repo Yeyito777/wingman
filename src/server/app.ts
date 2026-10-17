@@ -245,7 +245,7 @@ export function startServer(opts: AppOptions = {}) {
               let c = s.pendingCheckin ?? s.askCheckin("manual", now);
               if (!c || c.status !== "pending") return json({ error: "a check-in is already being scored" }, 409);
               afterAction(s);
-              const delay = Math.max(0, Math.min(10_000, Number(b.delayMs ?? 2500)));
+              const delay = Math.max(0, Math.min(15_000, Number(b.delayMs ?? 2500)));
               const id = c.id;
               const live = s.demoAnswerMode === "live";
               const run = async () => {
