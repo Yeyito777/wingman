@@ -30,7 +30,7 @@ export default function Member() {
       </Screen>
     );
   }
-  const st = memberStatus(m, now);
+  const st = memberStatus(m, now, self?.id);
   const dist = m.isYou ? null : distanceM(self?.fix, m.fix);
   const run = (k: string, f: () => Promise<unknown>) => async () => {
     setBusy(k);

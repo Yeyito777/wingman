@@ -3,7 +3,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { AlertState, MemberView } from "@shared/protocol";
 import { useEffect, useState } from "react";
-import { Linking, Platform, ScrollView, View } from "react-native";
+import { Linking, Platform, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNow } from "../lib/hooks";
 import { directionsUrl, memberPhone, tel } from "../lib/links";
@@ -61,30 +61,36 @@ export function AlertTakeover({ alert, member }: { alert: AlertState; member: Me
             ))}
           </View>
 
-          <View style={{ marginTop: 26, backgroundColor: "rgba(0,0,0,0.22)", borderRadius: 18, padding: 16, flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <Ionicons name="location" size={26} color={colors.white} />
-            <View style={{ flex: 1 }}>
-              <T v="headline" style={{ fontSize: 19 }}>
-                {dist !== null ? formatDistance(dist) : member.fix ? "Location shared" : "Location unknown"}
-              </T>
-              {others.length > 0 ? (
-                <T v="callout" color="#FFD3CF">
-                  {others.map((o) => o.byName).join(", ")} {others.length === 1 ? "is" : "are"} on the way
+          <View style={{ marginTop: 26, backgroundColor: "rgba(0,0,0,0.22)", borderRadius: 18, overflow: "hidden" }}>
+            <View style={{ padding: 16, flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <Ionicons name="location" size={24} color={colors.white} />
+              <View style={{ flex: 1 }}>
+                <T v="headline" style={{ fontSize: 19 }}>
+                  {dist !== null ? formatDistance(dist) : member.fix ? "Location shared" : "Location unknown"}
                 </T>
-              ) : secs !== null ? (
-                <T v="callout" color="#FFD3CF">
-                  {alert.stage < 2 ? `Their phone sounds a siren in ${fmt(secs)}` : `Emergency contact texted in ${fmt(secs)}`}
-                </T>
-              ) : null}
+                {others.length > 0 ? (
+                  <T v="callout" color="#FFD3CF">
+                    {others.map((o) => o.byName).join(", ")} {others.length === 1 ? "is" : "are"} on the way
+                  </T>
+                ) : secs !== null ? (
+                  <T v="callout" color="#FFD3CF">
+                    {alert.stage < 2 ? `Siren on ${member.name}'s phone in ${fmt(secs)}` : `Emergency contact texted in ${fmt(secs)}`}
+                  </T>
+                ) : null}
+              </View>
             </View>
             {member.fix && (
-              <Button
-                title="Directions"
-                kind="secondary"
-                size="m"
-                style={{ backgroundColor: "rgba(255,255,255,0.18)" }}
+              <Pressable
+                accessibilityRole="button"
                 onPress={() => Linking.openURL(directionsUrl(member.fix!, member.name))}
-              />
+                style={({ pressed }) => [{ borderTopWidth: 0.5, borderColor: "rgba(255,255,255,0.25)", padding: 14, flexDirection: "row", alignItems: "center", gap: 10 }, pressed && { opacity: 0.6 }]}
+              >
+                <Ionicons name="navigate" size={20} color={colors.white} />
+                <T v="headline" style={{ flex: 1 }}>
+                  Directions
+                </T>
+                <Ionicons name="chevron-forward" size={18} color="#FFD3CF" />
+              </Pressable>
             )}
           </View>
         </ScrollView>

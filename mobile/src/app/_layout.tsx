@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Overlays } from "../components/Overlays";
+import { installDevHook } from "../lib/devhook";
 import { configureNotifications } from "../services/alarm";
 import * as sensors from "../services/sensors";
 import * as session from "../services/session";
@@ -13,6 +14,7 @@ import { colors } from "../theme";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 configureNotifications();
+installDevHook();
 
 const theme = { ...DarkTheme, colors: { ...DarkTheme.colors, background: colors.bg, card: colors.bg } };
 

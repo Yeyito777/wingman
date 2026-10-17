@@ -8,7 +8,7 @@ import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
 import { MemberMap } from "../components/MemberMap";
 import { Avatar, Button, Dot, IconButton, Screen, T } from "../components/ui";
 import { endNight } from "../services/session";
-import { distanceM, formatDistance, me, memberStatus } from "../state/reducer";
+import { distanceM, formatDistance, me, memberStatus, orderedMembers } from "../state/reducer";
 import { useApp } from "../state/store";
 import { colors, radius } from "../theme";
 import { showError } from "../lib/errors";
@@ -25,7 +25,7 @@ export default function Group() {
     if (!inGroup) router.replace("/start");
   }, [inGroup]);
 
-  const members = view?.members ?? [];
+  const members = orderedMembers(view);
   const others = members.filter((m) => !m.isYou);
 
   const onEnd = () => {
@@ -108,7 +108,7 @@ export default function Group() {
 }
 
 function MemberCard({ m, self, now }: { m: MemberView; self: MemberView | null; now: number }) {
-  const st = memberStatus(m, now);
+  const st = memberStatus(m, now, self?.id);
   const dist = m.isYou ? null : distanceM(self?.fix, m.fix);
   const alert = st.tone === "alert";
   return (

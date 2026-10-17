@@ -2,7 +2,7 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import type { ComponentProps, ReactNode } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { tap } from "../services/alarm";
 import { interaction } from "../services/sensors";
@@ -156,5 +156,5 @@ export const s = StyleSheet.create({
   card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16 },
   iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface2, alignItems: "center", justifyContent: "center" },
   field: { backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: 16, minHeight: 56, justifyContent: "center" },
-  input: { color: colors.text, fontSize: 20, fontFamily: font, paddingVertical: 14 },
+  input: { color: colors.text, fontSize: 20, fontFamily: font, paddingVertical: 14, ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : {}) },
 });

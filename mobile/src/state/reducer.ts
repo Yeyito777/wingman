@@ -163,6 +163,13 @@ function nextActiveCheckin(s: State, v: GroupView): Checkin | null {
 export const me = (s: State): MemberView | null => s.view?.members.find((m) => m.isYou) ?? null;
 export const others = (s: State): MemberView[] => s.view?.members.filter((m) => !m.isYou) ?? [];
 
+/** Card order: anyone in alert first (most severe), then you, then the rest in join order. */
+export function orderedMembers(v: GroupView | null): MemberView[] {
+  if (!v) return [];
+  const rank = (m: MemberView) => (m.alert ? -10 + -m.alert.stage : m.isYou ? 0 : 1);
+  return v.members.map((m, i) => ({ m, i })).sort((a, b) => rank(a.m) - rank(b.m) || a.i - b.i).map((x) => x.m);
+}
+
 export type Overlay =
   | { kind: "bystander"; alert: AlertState }
   | { kind: "alert"; alert: AlertState; member: MemberView }
@@ -188,10 +195,13 @@ export function overlay(s: State): Overlay {
 export type Tone = "ok" | "watch" | "alert" | "quiet";
 
 /** One dot colour + one short line per member card. */
-export function memberStatus(m: MemberView, now: number): { tone: Tone; label: string } {
+export function memberStatus(m: MemberView, now: number, youId?: string | null): { tone: Tone; label: string } {
   if (m.alert) {
-    const by = m.alert.acks[m.alert.acks.length - 1];
-    return { tone: "alert", label: by ? `${by.byName} is on the way` : m.alert.stage >= 3 ? "Emergency contact notified" : "May need help" };
+    const acks = m.alert.acks;
+    const mine = acks.some((a) => a.by === youId);
+    const by = acks[acks.length - 1];
+    const label = mine ? "You're on your way" : by ? `${by.byName} is on the way` : m.alert.stage >= 3 ? "Emergency contact notified" : m.alert.stage >= 2 ? "Siren on their phone" : "May need help";
+    return { tone: "alert", label };
   }
   if (m.checkin && m.checkin.status !== "done") return { tone: "watch", label: "Checking in…" };
   if (m.presence === "silent") return { tone: "watch", label: `Phone went quiet · ${ago(m.lastSeenAt, now)}` };

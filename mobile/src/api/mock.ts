@@ -58,10 +58,10 @@ function member(p: Partial<MemberView> & { id: string; name: string; color: stri
 
 const at = (dLat: number, dLng: number, now: number) => ({ lat: BASE.lat + dLat, lng: BASE.lng + dLng, accuracy: 12, at: now });
 
-function build(name: string, now: number): World {
+function build(name: string, now: number, self: { medical?: string; contact?: { name: string; phone: string }; phone?: string } = {}): World {
   const youId = "m_you";
   const members = [
-    member({ id: youId, name, color: "#6E8BFF", isYou: true, simulated: false, fix: at(0, 0, now), medical: "", emergencyContact: { name: "", phone: "" } }, now),
+    member({ id: youId, name, color: "#6E8BFF", isYou: true, simulated: false, fix: at(0, 0, now), medical: self.medical ?? "", emergencyContact: self.contact ?? { name: "", phone: "" }, phone: self.phone ?? "" }, now),
     member({ id: "m_maya", name: "Maya", color: "#FF6B9A", fix: at(0.0021, 0.0018, now), lastSeenAt: now - 2 * MIN }, now),
     member({ id: "m_sam", name: "Sam", color: "#30D5C8", fix: at(-0.0001, 0.0002, now), lastSeenAt: now - 30_000, signals: undefined as any }, now),
     member({ id: "m_leo", name: "Leo", color: "#FFB340", fix: at(0.0003, -0.0004, now), lastSeenAt: now - 4 * MIN, presence: "background" }, now),
@@ -79,6 +79,7 @@ function applyScene(w: World, scene: MockScene, now: number) {
     m.checkin = null;
     m.risk = { score: 4, level: "ok", reasons: [], summary: "all good" };
     if (!m.isYou) m.medical = "";
+    if (m.isYou) m.lastSeenAt = now;
   }
   maya.fix = at(0.0021, 0.0018, now);
   if (scene === "watch") {
@@ -210,14 +211,14 @@ async function mockFetch(url: string, init: RequestInit = {}): Promise<Response>
   await new Promise((r) => setTimeout(r, 120));
   if (path === "/api/health") return json({ ok: true, protocolVersion: PROTOCOL_VERSION });
   if (path === "/api/groups" && init.method === "POST") {
-    world = build(body.member?.name || "You", now);
+    world = build(body.member?.name || "You", now, { medical: body.member?.medical, contact: body.member?.emergencyContact, phone: body.member?.phone });
     return json(joinResponse(world));
   }
   const m = path.match(/^\/api\/groups\/([A-Z0-9]+)(\/.*)?$/i);
   if (!m) return json({ error: "not found" }, 404);
   const rest = m[2] ?? "";
   if (rest === "/join") {
-    world = build(body.name || "You", now);
+    world = build(body.name || "You", now, { medical: body.medical, contact: body.emergencyContact, phone: body.phone });
     world.code = m[1]!.toUpperCase();
     return json(joinResponse(world));
   }

@@ -99,7 +99,7 @@ export function Bystander({ alert }: { alert: AlertState }) {
           )}
         </ScrollView>
         <View style={{ paddingHorizontal: 20, paddingBottom: Platform.OS === "web" ? 16 : 4 }}>
-          <Button title="I'm OK" kind="ghost" onPress={() => setPinMode(true)} style={{ borderWidth: 1.5, borderColor: "rgba(255,255,255,0.4)" }} testID="im-ok" />
+          <Button title="I'm OK" kind="secondary" onPress={() => setPinMode(true)} style={{ backgroundColor: "rgba(0,0,0,0.28)" }} testID="im-ok" />
         </View>
       </SafeAreaView>
     </View>
