@@ -47,8 +47,9 @@ contact is texted.
    the night ends** (any member can end it) or after 12 h. Leaving deletes your data. Voice replies are scored and
    discarded.
 7. **Demo mode** for presenting: simulated friends (Sam, Maya, Leo) who move, heartbeat and answer check-ins;
-   accelerated timers; a projector **stage view** whose storyline advances with a clicker, with either the real phone
-   or a simulated friend as the one in trouble. The same storyline runs as an automated test.
+   accelerated timers; a projector **stage view** whose storyline advances with a clicker (or clickable steps and
+   **Next ▶** in a slim presenter dock; **D** shows presenter details), with either the real phone or a simulated
+   friend as the one in trouble. The same storyline runs as an automated test.
 
 ## Run it
 
@@ -94,7 +95,7 @@ demo clip doesn't spend quota.
  ┌──────────────────────────────┐          ┌────────────────────────┐    ┌──────────────┐
  │ location · motion/fall ·     │          │ member cards + map,    │    │ join, alerts,│
  │ heartbeat · app state ·      │          │ alarm takeover, clicker│    │ ack, PIN     │
- │ battery · voice check-ins    │          │ storyline sidebar      │    └──────┬───────┘
+ │ battery · voice check-ins    │          │ storyline dock         │    └──────┬───────┘
  │ alerts: on my way / found OK │          └──────────┬─────────────┘           │
  └──────┬──────────────▲────────┘                     │ WS (observer)           │
   REST signals/answers │ WS hello/view/alert/checkin  │ POST /demo/*            │
@@ -132,6 +133,7 @@ ladder. A coherent check-in clears earlier signals, so the same drift isn't flag
 ```bash
 bun test                 # unit (risk engine, escalation) + end-to-end group storyline over HTTP/WS, ~5 s, no network
 bun run screenshots      # drives the stage view + web fallback in headless Chromium; fails on JS errors, overflow or occlusion
+bun scripts/stage-shots.ts /tmp/shots   # stage with the phone at UofT St. George, driven by clicking the dock (PHONE_ACC=1500: coarse fix)
 bun run rehearse         # dress rehearsal: the stage storyline at real pitch pace (~95 s) with timeline checks
 E2E_LIVE_AI=1 secrets run --allow GEMINI_API_KEY -- bun test tests/e2e.test.ts   # +1 real Gemini call with an iOS .m4a
 ```

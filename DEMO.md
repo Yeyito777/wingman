@@ -5,8 +5,9 @@
 when one of them can't ask for help, **every other phone in the group** asks for them.
 
 **Setup:** the projector shows the laptop's **stage view**: the whole group (you + simulated friends Sam, Maya and Leo
-who move and heartbeat on the server), a live map, and a storyline sidebar. Your iPhone runs the Wingman app and is a
-real member of the group. A presentation clicker (or →) advances the story.
+who move and heartbeat on the server), a live map, and a slim presenter dock along the bottom (the storyline steps and
+**Next ▶**). Your iPhone runs the Wingman app and is a real member of the group. A presentation clicker (or →, or a
+click on a step / Next ▶) advances the story.
 
 The scripted path is deterministic: canned answers are scored by the deterministic engine, timers are fixed (L1→L2
 15 s, L2→L3 15 s). The only live-AI moment is step ①, and its failure mode is harmless (if Gemini is down, the scorer
@@ -19,14 +20,20 @@ real instead (labelled "Gemini" on screen; safe: if every engine fails the scrip
 
 1. **Server:** `secrets run --allow GEMINI_API_KEY -- bun run dev` (or the deployed `https://<domain>`), plus
    `bun run tunnel` for an HTTPS URL if the phone isn't on the deployed domain.
-2. **Laptop:** open `<URL>/` → **Create a stage demo**. The stage view opens: move it to the projector → **F11**.
-   Check the sidebar badges: `AI: gemini`, `L3: simulated` (or `twilio`).
+2. **Laptop:** open `<URL>/` → **Presenting? Create a stage demo** (small link at the bottom). The stage view opens:
+   move it to the projector → **F11**. Press **D** (or **?**) for presenter details: `AI: gemini`,
+   `Emergency SMS: simulated` (or `twilio`), the simulated/phone/story tags on the cards and the key help. Press **D**
+   again to hide them before judges look (the choice is remembered).
 3. **Phone:** open the Wingman app → **Join** → scan the QR on the stage (or type the 6-letter code). Name **Yeyito**,
    PIN **1234**, medical info, emergency contact **Mom**, consent. Allow location, motion, microphone, notifications.
-   Your card appears on the stage with a **PHONE · STORY** tag (you are the one in trouble by default).
+   Your card appears on the stage and the dock reads **Yeyito's story** (you are the one in trouble by default). The
+   simulated friends gather around your phone wherever it is (even with iOS "Precise Location" off), and the map
+   follows. Your card should say *With the group*; *Waiting for location…* or *Location is off* means the phone
+   isn't sending a fix (check Settings → Wingman → Location: While Using + Precise).
    - Volume max, ring/silent switch **off**, keep the app in the foreground.
-4. Press → once on the stage (arms the alarm sound), laptop volume up. **Shift+R** resets the demo (friends re-gather
-   next to your phone's location).
+4. Click anywhere on the stage once, not on a card (enables the alarm sound: the "Sound off" note under the dock
+   disappears), laptop volume up. **Shift+R** (or **Reset ↺** at the end of the dock) resets the demo (friends
+   re-gather next to your phone's location).
 5. Rehearse once end to end, then Shift+R. (`bun run rehearse` runs the same storyline headless as a sanity check.)
 
 ---
@@ -48,8 +55,13 @@ real instead (labelled "Gemini" on screen; safe: if every engine fails the scrip
 | **3:15–3:45** | "And it's symmetric: if Maya had gone down, *my* phone would be the one buzzing, with her location and medical info. Privacy is built in: everyone opts in, friends see your medical info only during your alert, and when the night ends everything is deleted, with no database. Built solo in 36 hours: a native iPhone app, a Bun + TypeScript server, **Gemini audio understanding** for check-ins, Twilio for SMS, on **Vultr**." | (Optional) **S** to make Maya the subject and show your phone getting her alert, if time allows. | |
 | **3:45–4:00** | "The moment you need help most is the moment you can't ask for it. **Your friends' phones ask for you.**" | | |
 
-**Clicker keys (stage view):** → / Space / PgDn next step · ← step back · **S** cycle who's in trouble (or click a card)
-· **A** scripted ↔ real-audio answers · **Shift+R** reset.
+**Clicker keys (stage view):** → / Space / PgDn next step · ← step back · **S** cycle who's in trouble (or click a card,
+or the "…'s story" button in the dock) · **A** scripted ↔ real-audio answers · **D** / **?** presenter details ·
+**Shift+R** reset.
+
+**Mouse:** the dock's steps are clickable. Clicking the current step (or **Next ▶**) runs it; clicking a later step runs
+every step up to it, paced so each lands (e.g. click *Fall* to play Drift away + Fall; a friend's *on my way* waits for
+the alert to start); clicking an earlier step rewinds to it without undoing anything (Shift+R for a clean slate).
 
 **Variant: Maya is the one in trouble** (shows your phone as the guardian): click Maya's card (or press S), run
 ②③④. Your phone alerts *"Maya may need help"*; tap **I'm on my way**, then **Found & OK** on the phone.
@@ -57,7 +69,10 @@ real instead (labelled "Gemini" on screen; safe: if every engine fails the scrip
 ### If something goes off-script
 
 - **Step ① doesn't hear you** (noisy room): type the answer in the app, or just move on. Step ② starts a fresh scene.
-- **No alarm sound on the laptop:** click once in the stage sidebar (browsers need a gesture for audio).
+- **No alarm sound on the laptop:** click once on the stage header or dock (browsers need a gesture for audio).
+- **Your pin isn't on the map / card says *Waiting for location…*:** on the phone, Settings → Wingman → Location
+  (While Using or Always, Precise on), then reopen the app; it starts sending within 5 s. Or run the story with
+  Maya as the subject (click her card).
 - **The phone app was backgrounded / restarted:** reopen it; it reconnects to the same group (the storyline state
   lives on the server).
 - **Want to rerun:** Shift+R. Everyone stays connected.
@@ -69,7 +84,7 @@ real instead (labelled "Gemini" on screen; safe: if every engine fails the scrip
 1. **Network dies:** laptop on the phone's hotspot, rerun `bun run tunnel`. Worst case, run the storyline with Maya as
    the subject: the stage alone tells the whole story with simulated friends (`localhost`, no phone needed).
 2. **Gemini unavailable or rate-limited:** nothing to do. The scorer falls back automatically, and the scripted path
-   never calls an API. The sidebar badge shows the active engine.
+   never calls an API. Presenter details (**D**) show the active engine.
 3. **Pre-recorded video (~90 s):** record the stage view (OBS) and the phone (QuickTime → New Movie Recording → iPhone)
    running this exact script; keep it on the laptop desktop and as an unlisted YouTube link for Devpost.
 4. **Total failure:** `docs/screenshots/` walks through the whole story.
