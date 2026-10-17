@@ -10,6 +10,7 @@ import type {
   DemoAction,
   DemoActionRequest,
   GroupPreview,
+  GroupView,
   JoinResponse,
   MemberSettingsRequest,
   MemberSetup,
@@ -141,6 +142,10 @@ export class WingmanClient {
 
   join(code: string, setup: MemberSetup) {
     return this.req<JoinResponse>("POST", `/api/groups/${encodeURIComponent(code)}/join`, setup);
+  }
+
+  view() {
+    return this.req<GroupView>("GET", `/api/groups/${encodeURIComponent(this.need().code)}/view`);
   }
 
   signals(b: SignalBatch) {

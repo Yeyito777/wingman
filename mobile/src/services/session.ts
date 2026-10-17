@@ -57,9 +57,27 @@ export function connect() {
   disconnect();
   liveFor = id;
   live = client(m.serverUrl, m).connect({
-    onStatus: (status) => dispatch({ type: "connection", status }),
+    onStatus: (status) => {
+      dispatch({ type: "connection", status });
+      if (status === "closed") checkStillExists();
+    },
     onMessage: onMessage,
   });
+}
+
+/** The socket dropped: if the server no longer knows the group (ended, or restarted), stop retrying and go home. */
+async function checkStillExists() {
+  const m = getState().membership;
+  if (!m) return;
+  try {
+    await client(m.serverUrl, m).view();
+  } catch (e) {
+    if (e instanceof ApiError && (e.status === 404 || e.status === 403) && getState().membership === m) {
+      disconnect();
+      alarm.stopAll();
+      dispatch({ type: "left", reason: "That night isn't running any more. Start a new one or join again." });
+    }
+  }
 }
 
 export function disconnect() {
