@@ -1,5 +1,8 @@
 # ☀️ Morning checklist (Sat Oct 17)
 
+> **Superseded (Sat Oct 17 afternoon):** Wingman is now a symmetric group app (native iPhone client, `docs/PROTOCOL.md`).
+> The single-person phone/buddy pages below were removed; see README.md and DEMO.md for the current flow.
+
 Built overnight; every commit is after Fri 22:00 EDT. Repo: `~/Workspace/active-development/wingman` (local only,
 **not pushed**).
 

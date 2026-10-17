@@ -205,10 +205,14 @@ alert or check-in concerns them, the server sends a push if push is enabled (`en
 `POST /api/demo` makes a demo group with accelerated timers and simulated friends (Sam, Maya, Leo) that move and
 heartbeat on the server. The presenter's phone joins with the code like a normal member. `POST
 /api/groups/:code/demo/:action` with `{ target }` drives the storyline (`walk`, `fall`, `slurred`, `ack {by}`, …) for
-either the real phone or a simulated friend. The stage view is `/stage/:code?k=<stageKey>`.
+either the real phone or a simulated friend; `subject {target}` sets the default subject, `mode {mode}` switches scripted
+vs real-audio answers, `timers {timers}` overrides timers, `reset` clears every member's state (members stay
+connected). The stage view is `/stage/:code?k=<stageKey>`. Simulated friends answer their own check-ins coherently
+unless the storyline is driving them.
 
 ## CHANGELOG
 
 - **v2** (Oct 17 2026): `MemberView.phone` (the member's own number from `MemberSetup.phone`, `""` if not given),
-  visible to every member of the group so the alert takeover can offer "Call Maya". Additive; v1 clients keep working.
+  visible to every member of the group so the alert takeover can offer "Call Maya"; `MemberSettingsRequest.phone`.
+  Additive; v1 clients keep working. (Also documented the demo-only `subject` / `mode` / `timers` actions.)
 - **v1** (Oct 17 2026): first group protocol (symmetric members, join codes, per-member keys, WS hello/view/alert).

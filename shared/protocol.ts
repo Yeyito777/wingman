@@ -493,7 +493,11 @@ export type DemoAction =
   | "ack"
   | "resolve"
   | "scene"
-  | "reset";
+  | "reset"
+  /** demo setup: who the storyline is about ({target}), answer mode ({mode}), timers ({timers}) */
+  | "subject"
+  | "mode"
+  | "timers";
 
 /** POST /api/demo — create a demo group with simulated friends (Sam, Maya, Leo). Returns an observer (stage) key. */
 export interface CreateDemoRequest {
@@ -521,6 +525,10 @@ export interface DemoActionRequest {
   delayMs?: number;
   /** wait for scoring before responding */
   wait?: boolean;
+  /** "mode": scripted answers vs real audio through the AI */
+  mode?: "canned" | "live";
+  /** "timers": partial override, or a preset */
+  timers?: Partial<Timers> | "demo" | "real";
 }
 
 // ---------------------------------------------------------------- WebSocket
