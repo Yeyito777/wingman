@@ -4,9 +4,10 @@ import type { MemberView } from "@shared/protocol";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { toneColor, useNow } from "../lib/hooks";
-import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
+import { Alert, Linking, Platform, Pressable, ScrollView, View } from "react-native";
 import { MemberMap } from "../components/MemberMap";
 import { Avatar, Button, Dot, IconButton, Screen, T } from "../components/ui";
+import { locationReduced } from "../services/sensors";
 import { endNight } from "../services/session";
 import { distanceM, formatDistance, me, memberStatus, orderedMembers } from "../state/reducer";
 import { useApp } from "../state/store";
@@ -80,6 +81,8 @@ export default function Group() {
         </View>
       )}
 
+      <LocationHint self={self} />
+
       {mode === "map" ? (
         <View style={{ flex: 1, marginHorizontal: 20, borderRadius: radius.card, overflow: "hidden" }}>
           <MemberMap members={members} />
@@ -104,6 +107,31 @@ export default function Group() {
         <Button title="I'm heading home" kind="secondary" icon="home-outline" onPress={onEnd} testID="end-night" />
       </View>
     </Screen>
+  );
+}
+
+/** Your friends can't find you without a usable fix: say so, and offer the iPhone setting that fixes it. */
+function LocationHint({ self }: { self: MemberView | null }) {
+  if (!self || Platform.OS === "web") return null;
+  const loc = self.signals.sensors.location;
+  const text =
+    loc === "denied" || loc === "off"
+      ? "Location is off, so your friends can't see you on the map."
+      : locationReduced
+        ? "Precise Location is off, so friends only see you within a few km."
+        : null;
+  if (!text) return null;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => Linking.openSettings().catch(() => {})}
+      style={{ marginHorizontal: 20, marginBottom: 12, padding: 12, borderRadius: 12, backgroundColor: colors.surface, flexDirection: "row", alignItems: "center", gap: 10 }}
+    >
+      <Dot color={colors.yellow} size={8} />
+      <T v="callout" color={colors.text2} style={{ flex: 1 }}>
+        {text} <T v="callout" color={colors.text}>Open Settings</T>
+      </T>
+    </Pressable>
   );
 }
 
