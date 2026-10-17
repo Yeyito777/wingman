@@ -2,26 +2,13 @@
 // storyline and saves screenshots to docs/screenshots/. Fails on any page JS error or layout-guard problem.
 //   bun run screenshots            (uses Playwright's cached Chromium, or set CHROMIUM_PATH)
 
-import { existsSync, mkdirSync, readdirSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { mkdirSync } from "node:fs";
 import { chromium, type Page } from "playwright-core";
 import { startServer } from "../src/server/app.ts";
+import { findChromium } from "./chromium.ts";
 
-const OUT = "docs/screenshots";
+const OUT = process.env.SHOTS_OUT ?? "docs/screenshots";
 mkdirSync(OUT, { recursive: true });
-
-function findChromium(): string {
-  if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
-  const root = join(homedir(), ".cache/ms-playwright");
-  for (const dir of existsSync(root) ? readdirSync(root).sort().reverse() : []) {
-    for (const rel of ["chrome-linux64/chrome", "chrome-linux/chrome", "chrome-headless-shell-linux64/chrome-headless-shell"]) {
-      const p = join(root, dir, rel);
-      if (existsSync(p)) return p;
-    }
-  }
-  throw new Error("No Chromium found: install one with `bunx playwright install chromium` or set CHROMIUM_PATH");
-}
 
 const app = startServer({ port: 0, engines: ["mock"], quiet: true });
 const browser = await chromium.launch({
@@ -137,7 +124,7 @@ try {
   await stage.goto(d.stageUrl.replace(/^https?:\/\/[^/]+/, app.url));
   await stage.waitForSelector(".mcard");
   await stage.waitForTimeout(1500);
-  await stage.mouse.click(1200, 700); // arms sound (sidebar, not a card)
+  await stage.mouse.click(640, 30); // arms sound (header, not a card or a dock button)
   await shot(stage, "03-stage-calm");
   await stage.keyboard.press("ArrowRight"); // live check-in on the phone (left pending)
   await phone.waitForSelector("#ans", { timeout: 5000 });

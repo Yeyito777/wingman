@@ -10,14 +10,15 @@ const code = path[1] === "g" ? (path[2] ?? "").toUpperCase() : "";
 const store = (c: string) => `wingman:${c}`;
 
 function landing() {
-  app.innerHTML = `<div class="wrap stack">
+  app.innerHTML = `<div class="wrap stack landing">
     <div class="top"><div class="brand"><div class="logo">🪽</div>Wingman</div></div>
-    <div class="card"><h2>Everyone is everyone's wingman</h2>
-      <p class="muted">Get the iPhone app for the full experience. This page is a minimal web fallback.</p>
-      <label for="jc">Join code</label><input id="jc" placeholder="K7Q2XM" maxlength="6" autocapitalize="characters"/>
-      <button class="btn-primary btn-block" id="join" style="margin-top:10px">Join a group</button>
-      <button class="btn-ghost btn-block" id="new" style="margin-top:10px">Start a new group</button></div>
-    <div class="card"><h2>Presenting?</h2><button class="btn-ghost btn-block" id="demo">🎬 Create a stage demo (Sam, Maya, Leo)</button></div>
+    <div class="hero"><h1>Your friends,<br/>watching your back.</h1>
+      <p class="muted">Wingman notices when someone in your group can't ask for help (a fall, a slurred answer, wandering off) and gets the others there.</p></div>
+    <div class="card"><label for="jc" style="margin-top:0">Join tonight's group</label><input id="jc" placeholder="6-letter code" maxlength="6" autocapitalize="characters" autocomplete="off"/>
+      <button class="btn-primary btn-block" id="join" style="margin-top:10px">Join</button>
+      <button class="btn-ghost btn-block" id="new" style="margin-top:10px">Start a new group</button>
+      <p class="muted small" style="margin:12px 0 0">Best in the Wingman iPhone app. This browser version covers the basics.</p></div>
+    <p class="small center"><button class="linkish" id="demo">Presenting? Create a stage demo</button></p>
   </div>`;
   $("#join").onclick = () => {
     const c = ($("#jc") as HTMLInputElement).value.trim().toUpperCase();

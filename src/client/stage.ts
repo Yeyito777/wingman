@@ -1,10 +1,12 @@
 // Projector stage view: a calm, big-type group dashboard (member cards + map), an alarm takeover when anyone is in
-// alert, and a minimal storyline sidebar driven by a presentation clicker (→ / Space / PgDn).
+// alert, and a slim presenter dock: the storyline as clickable steps + Next, driven by a clicker (→ / Space / PgDn).
+// Presenter-only details (simulated-friend tags, engines, keys) are behind D or ?.
 
 import { STORY } from "../shared/story.ts";
 import type { AlertState, GroupView, MemberView, ServerMsg } from "../shared/types.ts";
 import { $, api, clock, connect, engineLabel, esc, fmtM, loopSound, patch, qrImg, successChime, toast, unlockAudio } from "./common.ts";
 import { createMap } from "./map.ts";
+import { statusLine } from "./status.ts";
 
 const app = $("#app");
 const code = location.pathname.split("/")[2] ?? "";
@@ -15,8 +17,11 @@ let step = 0;
 let armed = false;
 let stopAlarm: (() => void) | null = null;
 
+const PRESENTER_KEY = "wingman:presenter";
+
 function shell() {
   document.body.classList.add("stage");
+  document.body.classList.toggle("presenter", localStorage.getItem(PRESENTER_KEY) === "1");
   app.innerHTML = `<div class="st">
     <header class="st-top">
       <div class="brand"><div class="logo">🪽</div>Wingman <span class="st-name" id="gname"></span></div>
@@ -27,14 +32,13 @@ function shell() {
       <section class="st-map"><div id="map"></div></section>
       <div class="st-alarm hidden" id="alarm"></div>
     </main>
-    <aside class="st-side">
-      <h3>Storyline</h3>
-      <ol class="st-story" id="story"></ol>
-      <div class="st-subject" id="subject"></div>
-      <div class="st-foot" id="foot"></div>
-      <p class="st-keys">→ / Space: next · S: switch who's in trouble · A: answer mode · Shift+R: reset</p>
-    </aside>
-    <div class="st-arm" id="arm">Click or press → to start (arms the alarm sound)</div>
+    <footer class="st-dock" id="dock">
+      <button class="dk-subject" id="subject" tabindex="-1" title="Whose story this is (S, or click a card)"></button>
+      <ol class="dk-steps" id="story"></ol>
+      <button class="dk-next" id="next" tabindex="-1" title="Next step (→ / Space / clicker)">Next ▶</button>
+      <div class="dk-details" id="details"></div>
+      <span class="dk-arm" id="arm">Sound off · click anywhere to enable</span>
+    </footer>
   </div>`;
 }
 
@@ -45,34 +49,28 @@ const currentSubject = (v: GroupView): MemberView | undefined =>
   v.members.find((m) => m.id === subjectId) ?? v.members.find((m) => !m.simulated) ?? v.members[0];
 
 function statusPill(m: MemberView) {
-  if (m.alert) return `<span class="pill alert">ALERT · L${m.alert.stage}</span>`;
-  if (m.presence === "silent") return `<span class="pill alert">SILENT</span>`;
+  if (m.alert) return `<span class="pill alert">ALERT</span>`;
+  if (m.presence === "silent") return `<span class="pill alert">NO SIGNAL</span>`;
   if (m.risk.level === "watch") return `<span class="pill watch">WATCH</span>`;
   return `<span class="pill ok">OK</span>`;
 }
 
 function card(m: MemberView) {
-  const line = m.risk.reasons.length
-    ? esc(cap(m.risk.summary))
-    : m.distanceFromGroupM !== null
-      ? `With the group${m.distanceFromGroupM > 0 ? ` · ${fmtM(m.distanceFromGroupM)}` : ""}`
-      : m.presence === "offline"
-        ? "Not connected yet"
-        : "With the group";
   const ci = m.checkin
-    ? `<span class="ci pending">🎙 ${m.checkin.status === "scoring" ? "scoring answer…" : "being checked in"}</span>`
+    ? `<span class="ci pending">${m.checkin.status === "scoring" ? "Listening to the answer…" : "Checking in…"}</span>`
     : m.lastCheckin?.outcome
-      ? `<span class="ci ${m.lastCheckin.outcome}">${m.lastCheckin.outcome === "ok" ? "✓ check-in OK" : m.lastCheckin.outcome === "impaired" ? "⚠ check-in sounded impaired" : "✕ missed check-in"}</span>`
+      ? `<span class="ci ${m.lastCheckin.outcome}">${m.lastCheckin.outcome === "ok" ? "✓ Check-in OK" : m.lastCheckin.outcome === "impaired" ? "Check-in sounded impaired" : "Missed a check-in"}</span>`
       : "";
-  const bat = m.signals.battery !== null ? `🔋 ${Math.round(m.signals.battery * 100)}%` : "";
-  const pres = { online: "● live", background: "◐ locked", silent: "○ silent", offline: "○ offline" }[m.presence];
+  const b = m.signals.battery;
+  const bat = b !== null ? `<span class="batt ${b < 0.2 ? "low" : ""}"><i style="--l:${Math.max(0, Math.min(1, b)).toFixed(2)}"></i></span>${Math.round(b * 100)}%` : "";
+  const pres = { online: "Live", background: "Phone locked", silent: "Not responding", offline: "Offline" }[m.presence];
   const isSubject = view && currentSubject(view)?.id === m.id;
   return `<div class="mcard ${m.alert ? "alert" : m.risk.level}" data-id="${m.id}">
     <div class="av" style="--c:${m.color}">${esc(m.name.charAt(0).toUpperCase())}</div>
     <div class="mc-body">
-      <div class="mc-head"><b>${esc(m.name)}</b>${m.simulated ? `<span class="tag">sim</span>` : `<span class="tag real">phone</span>`}${isSubject ? `<span class="tag story">story</span>` : ""}${statusPill(m)}</div>
-      <div class="mc-line">${line}</div>
-      <div class="mc-meta"><span class="pres ${m.presence}">${pres}</span>${bat ? `<span>${bat}</span>` : ""}${ci}</div>
+      <div class="mc-head"><b>${esc(m.name)}</b>${m.simulated ? `<span class="tag">simulated</span>` : `<span class="tag real">phone</span>`}${isSubject ? `<span class="tag story">story</span>` : ""}${statusPill(m)}</div>
+      <div class="mc-line">${statusLine(m)}</div>
+      <div class="mc-meta"><span class="pres ${m.presence}">${pres}</span>${bat ? `<span class="bat-l">${bat}</span>` : ""}${ci}</div>
     </div>
   </div>`;
 }
@@ -103,9 +101,12 @@ function renderAlarm(v: GroupView) {
   const now = clock.now();
   const acks = a.acks.length ? `<div class="acks">🏃 ${a.acks.map((k) => `<b>${esc(k.byName)}</b> is on the way`).join(" · ")}${a.nextEscalationAt ? ` · ladder paused` : ""}</div>` : "";
   const sms = v.notifications.filter((n) => n.aboutMemberId === a.memberId && n.channel !== "push").at(-1);
-  const smsCard = a.contactNotified && sms ? `<div class="sms"><div class="sms-h">💬 SMS → ${esc(sms.toName)} ${sms.simulated ? `<span class="tag">SIMULATED</span>` : `<span class="tag real">Twilio</span>`}</div><div class="sms-b">${esc(sms.body.slice(0, 150))}…</div></div>` : "";
-  const ci = m.lastCheckin?.result && m.lastCheckin.outcome !== "ok" ? `<div class="heard">🎙 “${esc(m.lastCheckin.result.transcript.slice(0, 110))}” <small>${esc(engineLabel(m.lastCheckin.result))}</small></div>` : "";
-  const others = v.alerts.slice(1).map((x) => `<span class="pill alert">${esc(x.memberName)} · L${x.stage}</span>`).join(" ");
+  const smsCard = a.contactNotified && sms ? `<div class="sms"><div class="sms-h">Text to ${esc(sms.toName)} ${sms.simulated ? `<span class="sms-sim">simulated</span>` : ""}</div><div class="sms-b">${esc(sms.body.slice(0, 150))}…</div></div>` : "";
+  const r = m.lastCheckin?.result;
+  // Audience: credit the AI when it really listened; the presenter also sees scripted/offline engines.
+  const engine = r ? `<small class="${r.engine === "gemini" || r.engine === "openai" ? "" : "pres-only"}">${esc(r.engine === "gemini" || r.engine === "openai" ? `heard by ${engineLabel(r)}` : engineLabel(r))}</small>` : "";
+  const ci = r && m.lastCheckin!.outcome !== "ok" ? `<div class="heard">“${esc(r.transcript.slice(0, 110))}” ${engine}</div>` : "";
+  const others = v.alerts.slice(1).map((x) => `<span class="pill alert">${esc(x.memberName)}</span>`).join(" ");
   const html = `<div class="al-head"><div class="al-title">${esc(m.name.toUpperCase())} MAY NEED HELP</div>${others ? `<div class="al-more">Also: ${others}</div>` : ""}</div>
     <div class="al-reasons">${m.risk.reasons.map((r) => `<span class="chip">${esc(r.text)}</span>`).join("") || `<span class="chip">${esc(a.trigger)}</span>`}</div>
     ${ci}
@@ -124,12 +125,21 @@ function renderSide(v: GroupView) {
   patch(
     $("#story"),
     STORY.map((s, i) => {
-      const who = s.by === "friend" ? friendName(v, subj) : subj?.name ?? "";
-      return `<li class="${i < step ? "done" : i === step ? "now" : ""}"><b>${i < step ? "✓" : i + 1}</b><div>${esc(s.label)}${who ? ` <span class="who">${esc(who)}</span>` : ""}<small>${esc(s.hint)}</small></div></li>`;
-    }).join("") + (step >= STORY.length ? `<li class="end">Done. Shift+R to reset.</li>` : ""),
+      const who = s.by === "friend" ? friendName(v, subj) : "";
+      const label = who ? `${who}: ${s.label.replace(/^A friend: /, "")}` : s.label;
+      return `<li class="${i < step ? "done" : i === step ? "now" : ""}" data-step="${i}" title="${esc(s.hint)}"><b>${i < step ? "✓" : i + 1}</b>${esc(label)}</li>`;
+    }).join(""),
   );
-  patch($("#subject"), subj ? `In trouble: <b style="color:${subj.color}">${esc(subj.name)}</b> ${subj.simulated ? "(simulated)" : "(real phone)"}` : "Waiting for members…");
-  patch($("#foot"), `<span class="badge">AI: ${esc(v.engines.scorer.replace(/\s*\(.*\)/, ""))}</span> <span class="badge">answers: ${mode === "live" ? "real audio → AI" : "scripted"}</span> <span class="badge">L3: ${esc(v.engines.notifier)}</span>`);
+  const done = step >= STORY.length;
+  const nextBtn = $("#next") as HTMLButtonElement;
+  nextBtn.textContent = done ? "Reset ↺" : "Next ▶";
+  nextBtn.title = done ? "Run it again (Shift+R)" : `Next: ${STORY[step]!.label} (→ / Space / clicker)`;
+  patch($("#subject"), subj ? `<span class="dot" style="background:${subj.color}"></span>${esc(subj.name)}'s story` : "Waiting for members…");
+  patch(
+    $("#details"),
+    `<span>AI: <b>${esc(v.engines.scorer.replace(/\s*\(.*\)/, ""))}</b></span><span>Answers: <b>${mode === "live" ? "real audio → AI" : "scripted"}</b></span><span>Emergency SMS: <b>${esc(v.engines.notifier)}</b></span>` +
+      `<span class="keys">→ next · ← back · S who's in trouble · A answers · D details · Shift+R reset</span>`,
+  );
 }
 
 const friendName = (v: GroupView, subj?: MemberView) => (v.members.find((m) => m !== subj && m.simulated) ?? v.members.find((m) => m !== subj))?.name ?? "";
@@ -192,12 +202,52 @@ async function next() {
   else await demo(s.action);
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Wait (up to `ms`) until the latest view satisfies `ok`. */
+async function until(ok: (v: GroupView) => boolean, ms: number) {
+  for (const t0 = Date.now(); Date.now() - t0 < ms; await sleep(200)) if (view && ok(view)) return true;
+  return false;
+}
+
+let running = false;
+/** Clicking a step: an earlier step rewinds the pointer to it; the current or a later one runs every step up to and
+ *  including it, paced so each lands (a friend's ack waits for the alert it acknowledges). */
+async function runTo(target: number) {
+  if (!view || running) return;
+  if (target < step) {
+    step = target;
+    renderSide(view);
+    return;
+  }
+  running = true;
+  try {
+    while (step <= target && step < STORY.length) {
+      const s = STORY[step]!;
+      if (s.by === "friend") {
+        const id = currentSubject(view)?.id;
+        await until((v) => v.alerts.some((a) => a.memberId === id), 20_000);
+      }
+      await next();
+      if (step <= target) await sleep(s.action === "walk" ? 2500 : 1200);
+    }
+  } finally {
+    running = false;
+  }
+}
+
 async function reset() {
   if (!confirm("Reset the demo for another run?")) return;
   step = 0;
   stopAlarm?.();
   stopAlarm = null;
   await demo("reset");
+}
+
+function togglePresenter() {
+  const on = document.body.classList.toggle("presenter");
+  localStorage.setItem(PRESENTER_KEY, on ? "1" : "0");
+  map?.invalidate();
 }
 
 function arm() {
@@ -228,6 +278,7 @@ function start() {
       step = Math.max(0, step - 1);
       if (view) renderSide(view);
     } else if ((e.key === "R" || e.key === "r") && e.shiftKey) void reset();
+    else if (e.key === "d" || e.key === "D" || e.key === "?") togglePresenter();
     else if (e.key === "s" || e.key === "S") cycleSubject();
     else if (e.key === "a" || e.key === "A") {
       mode = mode === "canned" ? "live" : "canned";
@@ -235,9 +286,16 @@ function start() {
       if (view) renderSide(view);
     }
   });
+  // Dock buttons never keep focus, so Space/Enter on the clicker can't also "click" them.
+  app.addEventListener("mousedown", (e) => (e.target as HTMLElement).closest("button") && e.preventDefault());
   app.addEventListener("click", (e) => {
     arm();
-    const c = (e.target as HTMLElement).closest<HTMLElement>(".mcard");
+    const t = e.target as HTMLElement;
+    const li = t.closest<HTMLElement>(".dk-steps li[data-step]");
+    if (li) return void runTo(Number(li.dataset.step));
+    if (t.closest("#next")) return void (step >= STORY.length ? reset() : runTo(step));
+    if (t.closest("#subject")) return cycleSubject();
+    const c = t.closest<HTMLElement>(".mcard");
     if (c?.dataset.id && view) {
       subjectId = c.dataset.id;
       void demo("subject", { target: subjectId });

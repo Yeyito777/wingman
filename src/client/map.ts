@@ -14,6 +14,8 @@ export function createMap(el: HTMLElement) {
   }).addTo(map);
   const pins = new Map<string, L.Marker>();
   const links = new Map<string, L.Polyline>();
+  /** coarse fixes (e.g. iOS "approximate location") get a translucent accuracy circle */
+  const rings = new Map<string, L.Circle>();
   let fitted = false;
   let lastKey = "";
 
@@ -36,6 +38,14 @@ export function createMap(el: HTMLElement) {
         }
         p.setLatLng(ll).setIcon(icon(alert ? "#ef4444" : m.color, alert, m.name.charAt(0).toUpperCase())).setZIndexOffset(alert ? 1000 : 500);
         pts.push(ll);
+        let ring = rings.get(m.id);
+        if (m.fix.accuracy > 150) {
+          if (!ring) rings.set(m.id, (ring = L.circle(ll, { radius: m.fix.accuracy, color: m.color, weight: 1, opacity: 0.5, fillOpacity: 0.08, interactive: false }).addTo(map)));
+          ring.setLatLng(ll).setRadius(m.fix.accuracy);
+        } else if (ring) {
+          ring.remove();
+          rings.delete(m.id);
+        }
         const near = m.nearestMemberId ? v.members.find((x) => x.id === m.nearestMemberId)?.fix : null;
         const far = (m.distanceFromGroupM ?? 0) > 50 && near;
         let line = links.get(m.id);
@@ -48,11 +58,14 @@ export function createMap(el: HTMLElement) {
           links.delete(m.id);
         }
       }
-      for (const [id, p] of pins) if (!seen.has(id)) (p.remove(), pins.delete(id), links.get(id)?.remove(), links.delete(id));
-      // Re-fit when the set of far-away / alerting members changes, or someone is walking.
-      const key = v.members.map((m) => `${m.id}:${(m.distanceFromGroupM ?? 0) > 50 ? 1 : 0}:${m.alert ? 1 : 0}`).join("|");
+      for (const [id, p] of pins) if (!seen.has(id)) (p.remove(), pins.delete(id), links.get(id)?.remove(), links.delete(id), rings.get(id)?.remove(), rings.delete(id));
+      // Re-fit when who's on the map changes, the set of far-away / alerting members changes, someone is walking, or
+      // a pin left the visible area (e.g. a phone 30 km from where the map started, or everyone moving to it).
+      const key = v.members.map((m) => `${m.id}:${m.fix ? 1 : 0}:${(m.distanceFromGroupM ?? 0) > 50 ? 1 : 0}:${m.alert ? 1 : 0}`).join("|");
       const moving = v.members.some((m) => (m.distanceFromGroupM ?? 0) > 50);
-      if (pts.length && (!fitted || key !== lastKey || moving)) {
+      const view = map.getBounds();
+      const outside = fitted && pts.some((p) => !view.contains(p));
+      if (pts.length && (!fitted || key !== lastKey || moving || outside)) {
         if (pts.length === 1) map.setView(pts[0]!, 17, { animate: fitted });
         else map.fitBounds(L.latLngBounds(pts).pad(0.35), { maxZoom: 18, animate: fitted });
         fitted = true;

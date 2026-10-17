@@ -54,7 +54,7 @@ try {
   stage.on("pageerror", (e) => fail(`stage JS: ${e.message}`));
   await stage.goto(`${app.url}/stage/${d.code}?k=${d.stageKey}`);
   await stage.waitForSelector(".mcard");
-  await stage.mouse.click(1200, 700);
+  await stage.mouse.click(640, 30); // arms sound (header, not a card or a dock button)
   log("stage view open (4 members)");
 
   const press = async (n: number, what: string) => {
