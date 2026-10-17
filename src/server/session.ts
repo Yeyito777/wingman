@@ -395,7 +395,8 @@ export class Session {
       sessionStartedAt: this.startedAt,
       clearedAt: this.clearedAt,
       fallAt: this.fallAt,
-      lastMotionAt: this.lastMotionAt,
+      // Without a working motion sensor, "no movement" means nothing: don't let it count as stillness.
+      lastMotionAt: this.sensors.motion === "on" ? this.lastMotionAt : now,
       lastInteractionAt: this.lastInteractionAt,
       // A phone that said "going to background" isn't a dead-man's-switch trigger; one that just died is.
       lastHeartbeatAt: this.backgrounded ? null : this.lastHeartbeatAt,
@@ -455,9 +456,11 @@ export class Session {
         this.askCheckin(fx.reason === "alert" ? "alert" : `suspicion: ${fx.reason.replace(/_/g, " ")}`, now, PROBE_PROMPTS[fx.reason] ?? PROBE_PROMPTS.default);
         return;
       }
-      case "alertBuddies":
-        this.log("alert", `LEVEL 1 · Buddies alerted: ${name} may need help: ${this.risk(now).summary}.`, now);
+      case "alertBuddies": {
+        const risk = this.risk(now);
+        this.log("alert", `LEVEL 1 · Buddies alerted: ${name} may need help: ${risk.reasons.length ? risk.summary : `alert raised ${fx.trigger}`}.`, now);
         return;
+      }
       case "bystander":
         this.log("alert", `LEVEL 2 · Bystander mode on ${name}'s phone: siren, "This person may need help", medical info, Call 911.`, now);
         return;
@@ -486,8 +489,9 @@ export class Session {
     const risk = this.risk(now);
     const where = pos ? ` Last location: https://maps.google.com/?q=${pos.lat.toFixed(5)},${pos.lng.toFixed(5)}` : "";
     const live = this.baseUrl ? ` Live: ${this.baseUrl}/buddy/${this.id}?k=${this.inviteKey}` : "";
-    const body = `WINGMAN ALERT: ${name} may need help and isn't responding. ${cap(risk.summary)}.${where}${live} If you can't reach them, call 911.`;
-    const speech = `This is Wingman. ${name} may need help and is not responding. ${risk.summary}. Check your text messages for their location.`;
+    const why = risk.reasons.length ? risk.summary : "a friend raised the alert";
+    const body = `WINGMAN ALERT: ${name} may need help and isn't responding. ${cap(why)}.${where}${live} If you can't reach them, call 911.`;
+    const speech = `This is Wingman. ${name} may need help and is not responding. ${why}. Check your text messages for their location.`;
     const to = this.user.contactPhone || "(no number set)";
     this.log("notify", `LEVEL 3 · Notifying emergency contact ${this.user.contactName} (${to}) via ${this.hooks.notifier.name === "twilio" ? "Twilio SMS" : "simulated SMS"}.`, now);
     if (!this.user.contactPhone) {
