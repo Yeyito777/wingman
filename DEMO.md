@@ -25,7 +25,7 @@ if Gemini is down, the scorer falls back and the answer still counts as OK.
      (iOS pauses web pages when the screen locks).
 5. **Laptop volume up.** The alarm is part of the show.
 6. In the stage view press **Shift+R** (reset) so the log starts clean.
-7. Rehearse once end to end, then Shift+R again.
+7. Rehearse once end to end, then Shift+R again. (`bun run rehearse` runs the same storyline headless as a sanity check.)
 
 > Tip: if the phone page reloads, it shows **Tap to start guarding**. Tap it, since iOS needs a tap to re-enable the
 > sensors and sound.

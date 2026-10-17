@@ -24,9 +24,12 @@ on the laptop **Open stage view**, join as "Sam", then press → five times whil
 - ✅ Demo panel + **stage view** (projector dashboard + clicker-driven storyline; plays the slurred clip aloud).
 - ✅ **Gemini scoring of real audio** with your key: the slurred clip → impaired 0.6 "slurred speech, couldn't remember
   where they are"; the clear clip → OK. `gemini-flash-lite-latest`, ~2 s.
-- ✅ Tests: `bun test` → 26 pass (risk engine, escalation machine, 4 end-to-end storyline tests, dead-man's switch),
+- ✅ Tests: `bun test` → 27 pass (risk engine, escalation machine, 4 end-to-end storyline tests, dead-man's switch),
   and the optional live-Gemini test passes. `bun run screenshots` drives all pages in headless Chromium with zero
   JS errors and no layout overflow → `docs/screenshots/`.
+- ✅ `bun run rehearse` plays the exact stage storyline at real pitch pace in headless Chromium (phone page + stage
+  view + clicker keys): L1 fires 11 s after clicker ④, L2 +15 s, L3 +15 s, ack + PIN resolves. It never alerts early.
+  The browser-recorded WAV was also accepted by live Gemini.
 - ✅ Cloudflare tunnel tested (share links pick up the https host; WebSockets work through it).
 - ✅ Docker image builds and serves (tested with podman).
 

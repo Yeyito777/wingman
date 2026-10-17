@@ -146,6 +146,7 @@ ladder. A coherent check-in clears earlier signals, so the same drift isn't flag
 ```bash
 bun test                 # unit (risk engine, escalation) + end-to-end storyline, ~4 s, no network
 bun run screenshots      # drives all pages in headless Chromium and fails on JS errors or layout overflow
+bun run rehearse         # dress rehearsal: the stage storyline at real pitch pace (~100 s) with timeline checks
 E2E_LIVE_AI=1 secrets run --allow GEMINI_API_KEY -- bun test tests/e2e.test.ts   # +1 real Gemini call
 ```
 

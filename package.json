@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "tunnel": "bash scripts/tunnel.sh",
     "screenshots": "bun scripts/screenshots.ts",
-    "dev:watch": "bun --watch src/server/index.ts"
+    "dev:watch": "bun --watch src/server/index.ts",
+    "rehearse": "bun scripts/rehearse.ts"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
