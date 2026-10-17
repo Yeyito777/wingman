@@ -13,6 +13,7 @@ import { colors } from "../theme";
 
 type Step = "welcome" | "name" | "pin" | "pin2" | "medical" | "contact" | `perm:${PermKey}`;
 const PIN_LEN = 4;
+const PIN_PROMPT = "Only you can cancel an alarm about you. Someone who's confused, or who took your phone, can't.";
 
 export default function Onboarding() {
   const p = getState().profile;
@@ -114,9 +115,17 @@ export default function Onboarding() {
         {header}
         <View style={{ flex: 1, paddingHorizontal: 28, paddingTop: 24 }}>
           <T v="title">{step === "pin" ? "Choose a PIN" : pinError ? "PINs didn't match" : "Enter it again"}</T>
-          <T v="body" color={colors.text2} style={{ marginTop: 10 }}>
-            {step === "pin" ? "Only you can cancel an alarm about you. Someone who's confused, or who took your phone, can't." : "Just to be sure."}
-          </T>
+          {/* Both steps reserve the height of the longer prompt (invisible copy underneath), so the dots don't jump. */}
+          <View style={{ marginTop: 10 }}>
+            <View style={{ opacity: 0 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <T v="body">{PIN_PROMPT}</T>
+            </View>
+            <View style={{ position: "absolute", top: 0, left: 0, right: 0 }}>
+              <T v="body" color={colors.text2}>
+                {step === "pin" ? PIN_PROMPT : "Type the same PIN once more, just to be sure."}
+              </T>
+            </View>
+          </View>
           <View style={{ marginTop: 44 }}>
             <PinDots length={PIN_LEN} filled={v.length} error={pinError} />
           </View>
