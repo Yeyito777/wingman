@@ -126,7 +126,7 @@ export default function Onboarding() {
               </T>
             </View>
           </View>
-          <View style={{ marginTop: 44 }}>
+          <View style={{ marginTop: 44 }} testID="pin-dots">
             <PinDots length={PIN_LEN} filled={v.length} error={pinError} />
           </View>
         </View>
