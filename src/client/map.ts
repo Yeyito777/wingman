@@ -1,71 +1,62 @@
-// Live map: the person, their buddies and the venue. OSM tiles (darkened in CSS); markers are pure CSS (no image assets).
+// Live group map: every member as a coloured pin, members in alert pulse red with a dashed line to their nearest
+// friend. OSM tiles (darkened in CSS); markers are pure CSS (no image assets).
 
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { SessionView } from "../shared/types.ts";
+import type { GroupView } from "../shared/types.ts";
 import { esc } from "./common.ts";
 
 export function createMap(el: HTMLElement) {
-  const map = L.map(el, { zoomControl: false, attributionControl: true }).setView([43.7845, -79.1875], 16);
+  const map = L.map(el, { zoomControl: false, attributionControl: true }).setView([43.7845, -79.1875], 17);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
-  let user: L.Marker | null = null;
-  let acc: L.Circle | null = null;
-  let venue: L.Circle | null = null;
-  let link: L.Polyline | null = null;
-  const buddies = new Map<string, L.Marker>();
+  const pins = new Map<string, L.Marker>();
+  const links = new Map<string, L.Polyline>();
   let fitted = false;
+  let lastKey = "";
 
-  const icon = (cls: string) => L.divIcon({ className: "", html: `<div class="pin ${cls}"></div>`, iconSize: [22, 22], iconAnchor: [11, 11] });
+  const icon = (color: string, alert: boolean, initial: string) =>
+    L.divIcon({ className: "", html: `<div class="mpin ${alert ? "alert" : ""}" style="--c:${color}">${esc(initial)}</div>`, iconSize: [34, 34], iconAnchor: [17, 17] });
 
   return {
-    update(v: SessionView) {
+    update(v: GroupView) {
       const pts: L.LatLngExpression[] = [];
-      if (v.venue) {
-        const ll: L.LatLngExpression = [v.venue.lat, v.venue.lng];
-        venue ??= L.circle(ll, { radius: 60, color: "#38bdf8", weight: 1, fillOpacity: 0.12 }).addTo(map).bindTooltip(v.demo ? "Group" : "Venue", { permanent: true, direction: "top", className: "pin-label" });
-        venue.setLatLng(ll);
-        pts.push(ll);
-      }
-      if (v.fix) {
-        const ll: L.LatLngExpression = [v.fix.lat, v.fix.lng];
-        const cls = `user ${v.stage > 0 ? "alert" : ""}`;
-        if (!user) user = L.marker(ll, { icon: icon(cls), zIndexOffset: 1000 }).addTo(map).bindTooltip(esc(v.user.name), { permanent: true, direction: "right", offset: [12, 0], className: "pin-label" });
-        user.setLatLng(ll).setIcon(icon(cls));
-        acc ??= L.circle(ll, { radius: 10, color: "#8b5cf6", weight: 1, fillOpacity: 0.1 }).addTo(map);
-        acc.setLatLng(ll).setRadius(Math.min(v.fix.accuracy, 300));
-        pts.push(ll);
-        if (v.venue && (v.distanceFromGroupM ?? 0) > 50) {
-          const path: L.LatLngExpression[] = [[v.venue.lat, v.venue.lng], ll];
-          link ??= L.polyline(path, { color: "#ef4444", weight: 3, dashArray: "6 8" }).addTo(map);
-          link.setLatLngs(path);
-        } else if (link) {
-          link.remove();
-          link = null;
+      const seen = new Set<string>();
+      for (const m of v.members) {
+        if (!m.fix) continue;
+        seen.add(m.id);
+        const ll: L.LatLngExpression = [m.fix.lat, m.fix.lng];
+        const alert = !!m.alert;
+        let p = pins.get(m.id);
+        if (!p) {
+          p = L.marker(ll, { zIndexOffset: 500 }).addTo(map).bindTooltip(esc(m.name), { permanent: true, direction: "right", offset: [16, 0], className: "pin-label" });
+          pins.set(m.id, p);
         }
-      } else if (user) {
-        user.remove();
-        acc?.remove();
-        user = null;
-        acc = null;
-      }
-      for (const b of v.buddies) {
-        if (!b.fix || v.demo) continue;
-        const ll: L.LatLngExpression = [b.fix.lat, b.fix.lng];
-        let m = buddies.get(b.id);
-        if (!m) {
-          m = L.marker(ll, { icon: icon("buddy") }).addTo(map).bindTooltip(esc(b.name), { permanent: true, direction: "left", offset: [-10, 0], className: "pin-label" });
-          buddies.set(b.id, m);
-        }
-        m.setLatLng(ll);
+        p.setLatLng(ll).setIcon(icon(alert ? "#ef4444" : m.color, alert, m.name.charAt(0).toUpperCase())).setZIndexOffset(alert ? 1000 : 500);
         pts.push(ll);
+        const near = m.nearestMemberId ? v.members.find((x) => x.id === m.nearestMemberId)?.fix : null;
+        const far = (m.distanceFromGroupM ?? 0) > 50 && near;
+        let line = links.get(m.id);
+        if (far) {
+          const path: L.LatLngExpression[] = [[near.lat, near.lng], ll];
+          if (!line) links.set(m.id, (line = L.polyline(path, { color: "#ef4444", weight: 3, dashArray: "6 8" }).addTo(map)));
+          line.setLatLngs(path);
+        } else if (line) {
+          line.remove();
+          links.delete(m.id);
+        }
       }
-      if (pts.length && (!fitted || v.signals.walking || v.stage > 0)) {
+      for (const [id, p] of pins) if (!seen.has(id)) (p.remove(), pins.delete(id), links.get(id)?.remove(), links.delete(id));
+      // Re-fit when the set of far-away / alerting members changes, or someone is walking.
+      const key = v.members.map((m) => `${m.id}:${(m.distanceFromGroupM ?? 0) > 50 ? 1 : 0}:${m.alert ? 1 : 0}`).join("|");
+      const moving = v.members.some((m) => (m.distanceFromGroupM ?? 0) > 50);
+      if (pts.length && (!fitted || key !== lastKey || moving)) {
         if (pts.length === 1) map.setView(pts[0]!, 17, { animate: fitted });
-        else map.fitBounds(L.latLngBounds(pts).pad(0.5), { maxZoom: 17, animate: fitted });
+        else map.fitBounds(L.latLngBounds(pts).pad(0.35), { maxZoom: 18, animate: fitted });
         fitted = true;
+        lastKey = key;
       }
     },
     invalidate() {

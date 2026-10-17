@@ -1,6 +1,6 @@
-# Wingman: the night-out guardian that never needs you to press SOS
+# Wingman: everyone is everyone's wingman
 
-**Tagline:** When you can't ask for help, Wingman asks for you.
+**Tagline:** When you can't ask for help, your friends' phones ask for you.
 
 **Challenges:** Project KAZE · Best Solo Hack · AI for Social Impact · Best Use of Gemini API (MLH) · Best Use of
 Vultr (MLH) · Best Domain Name from GoDaddy Registry (MLH)
@@ -20,64 +20,71 @@ from "the next morning" to "about a minute", without asking the person to do any
 
 ## What it does
 
-Wingman is a web app (a PWA, with no download and no account) that you start when you go out:
+**Everyone is everyone's wingman.** Friends going out together join tonight's group with a 6-letter code. Every member
+is both guarded and a guardian: each phone watches its owner, and when one of them can't ask for help, every other
+phone in the group asks for them.
 
-- **Opt in for tonight.** Set a PIN, add medical info (allergies, meds) and an emergency contact, then share a link or
-  QR code with 1–3 friends. They open it on any phone and become your **buddies**.
-- **It watches passively.** Using only browser APIs, the phone detects **falls** (an impact followed by stillness),
-  tracks **distance from your group** (with GPS uncertainty subtracted, so indoor jitter doesn't cause alarms), notices
-  **stillness** and an **untouched phone**, and runs a **dead-man's switch**: if the phone suddenly goes silent (dead
-  battery, taken), that's a signal too.
-- **It talks to you.** Every 30 minutes, and whenever something looks off, your phone chimes and *asks out loud*:
-  "Hey, quick check-in: where are you, and who are you with?" You just answer. **Gemini listens to the audio** and
-  judges whether you sound coherent and oriented or slurred and confused, with a one-line reason a friend can
-  understand.
+- **Opt in for tonight.** Each member sets a PIN, optional medical info (allergies, meds) and an emergency contact,
+  and consents to being guarded and to guarding the others. No accounts; join by QR code, link or code.
+- **It watches passively.** The Wingman iPhone app detects **falls** (an impact followed by stillness), tracks
+  **distance from the group** (to the nearest friend, with GPS uncertainty subtracted so indoor jitter doesn't cause
+  alarms), notices **stillness** and an **untouched phone**, and runs a **dead-man's switch**: a phone that suddenly
+  goes silent (dead battery, taken) is a signal too, while one that reports being locked first isn't.
+- **It talks to you.** Every 30 minutes, whenever something looks off, or when a friend taps *ping*, your phone
+  chimes and *asks out loud*: "Hey, quick check-in: where are you, and who are you with?" You just answer. **Gemini
+  listens to the audio** and judges whether you sound coherent and oriented or slurred and confused, with a one-line
+  reason a friend can understand.
 - **It explains itself.** A deterministic risk engine combines everything into a score with readable reasons:
   *"check-in answer sounded impaired: slurred speech + fall detected 2 min ago + 310 m from your group."*
-- **It escalates on its own:**
-  1. **Buddies:** their screens take over with an alarm, your live location on a map, the reasons, and *I'm on my
-     way* / *Call* buttons. Everyone sees who's coming.
-  2. **Bystanders:** if no buddy responds, *your* phone turns into a flashing, siren-blaring sign: **"THIS PERSON MAY
-     NEED HELP"**, with a giant *Call 911* button and your medical info for first responders. Cancelling needs your
-     PIN, so a confused person can't dismiss it by accident.
-  3. **Emergency contact:** finally, a text (and optionally a call) to your emergency contact with the reasons and a
-     map link.
-- **It stands down gracefully.** A clear check-in answer, your PIN, or a buddy confirming they're with you resolves
-  the alert. The whole night is in a shared event log.
-- **Privacy is built in:** opt-in per night, location visible only during the session (or only on alert, your choice),
-  medical info revealed only during an alert, **no database**, and everything deleted when you end the night.
+- **It escalates on its own, per member** (several people can be in alert at once):
+  1. **The whole group:** every other member's phone alarms, with your live location, the reasons, and *I'm on my
+     way* / *Found & OK* / *Call*. Everyone sees who's coming, so the group doesn't all run.
+  2. **Bystanders:** if nobody responds, *your* phone turns into a flashing, siren-blaring sign: **"THIS PERSON MAY
+     NEED HELP"**, with a giant *Call 911* button and your medical info. Cancelling needs your PIN, so a confused
+     person can't dismiss it by accident.
+  3. **Emergency contact:** a text (and optionally a call) to your emergency contact with the reasons and a map link.
+- **It stands down gracefully.** A clear check-in answer, your PIN, or a friend confirming *found & OK* in person
+  resolves the alert. The whole night is in a shared event log.
+- **Privacy is built in:** opt-in per person, location shared only for the night (or only on alert), medical info
+  revealed to friends only during your alert, **no database**, and everything deleted when anyone ends the night.
 
 ## How we built it
 
-- **Server:** TypeScript on **Bun**: one process serving HTTP, a WebSocket push channel, and the bundled frontend
-  (Bun's HTML imports, no separate build step). Sessions live in memory by design.
+- **iPhone app:** native, built with Expo / React Native: background location, motion, voice recording (`.m4a`),
+  text-to-speech for the spoken question, local alerts and the bystander screen.
+- **Server:** TypeScript on **Bun**: one process serving a JSON REST API, a WebSocket push channel, and the projector
+  stage view. A typed wire protocol (`shared/protocol.ts`) is imported by both the server and the app. Groups live in
+  memory by design; each member authenticates with a per-member secret key.
 - **Risk engine + escalation ladder:** two **pure, deterministic functions** (signals → score + reasons;
-  state + event → state + effects), driven by a 250 ms tick. They're unit-tested, and the whole demo storyline runs as
-  an end-to-end test with a simulated phone and buddy over real HTTP/WebSocket connections.
-- **AI check-ins:** the phone records the reply with MediaRecorder, converts it in the browser to 16 kHz WAV, and the
-  server sends the **audio straight to the Gemini API** (`gemini-flash-lite-latest`, about 2 s) with a JSON response
-  schema: transcript, responded, coherent, impairment 0–1, signs, reason. If Gemini is rate-limited or down, it tries
-  the next Gemini model, then OpenAI (transcribe + small model), then a deterministic offline heuristic, so a check-in
-  is always scored. Results are cached by content hash.
-- **Phone sensors (all in the browser):** DeviceMotion (with the iOS permission prompt), Geolocation, Screen Wake Lock,
-  Web Audio (chimes, alarm and siren), Speech Synthesis (the spoken question), Vibration, Web Share, and `sendBeacon`
-  so the server can tell "screen locked" apart from "phone died".
-- **Maps:** Leaflet + OpenStreetMap.
+  state + event → state + effects), run per member on a 250 ms tick, with alerts fanned out to every other member.
+  They're unit-tested, and the whole demo storyline runs as an end-to-end test with three members connected over
+  real HTTP/WebSocket.
+- **AI check-ins:** the app records the reply (AAC `.m4a`) and the server sends the **audio straight to the Gemini
+  API** (`gemini-flash-lite-latest`, about 2 s) with a JSON response schema: transcript, responded, coherent,
+  impairment 0–1, signs, reason. If Gemini is rate-limited or down it tries the next Gemini model, then OpenAI
+  (transcribe + small model), then a deterministic offline heuristic, so a check-in is always scored.
+- **Maps:** Leaflet + OpenStreetMap on the stage view.
 - **Level 3:** a pluggable notifier: **Twilio** SMS/voice when configured, otherwise a clearly labelled simulation.
-- **Demo tooling:** Gemini TTS generated the demo voice clips. There's a control panel, plus a "stage view" (the buddy
-  dashboard for the projector) whose storyline advances with a presentation clicker, because this is a solo hack.
-- **Deploy:** Docker image, served on a **Vultr** VPS behind Caddy (automatic HTTPS) on a **GoDaddy** domain.
-  Cloudflare quick tunnels for phone testing during development.
+  Optional Expo push for alerts to backgrounded phones.
+- **Demo tooling:** simulated friends (Sam, Maya, Leo) who move, heartbeat and answer check-ins on the server; Gemini
+  TTS generated the demo voice clips; a projector "stage view" whose storyline advances with a presentation clicker,
+  because this is a solo hack. Either the real phone or a simulated friend can be the one in trouble.
+- **Deploy:** Docker image on a **Vultr** VPS behind Caddy (automatic HTTPS) on a **GoDaddy** domain. Cloudflare quick
+  tunnels for phone testing during development.
 
 ## Challenges we ran into
 
 - **Phones only expose sensors over HTTPS, and only after a tap.** iOS needs `DeviceMotionEvent.requestPermission()`
   called synchronously inside a tap, before any network request, plus an audio and speech "unlock" for later sounds.
   The whole setup flow is built around one tap.
-- **Browsers suspend pages when the screen locks.** A naive dead-man's switch would alert every time you pocket your
-  phone. We send a beacon when the page goes to the background so the server can distinguish "locked" from "silent".
-- **Audio formats:** Chrome records WebM/Opus and Safari records MP4/AAC. Decoding and re-encoding to WAV in the
-  browser made every AI engine happy.
+- **Watcher vs. watchee was the wrong model.** Our first version had one "person" and several "buddies". Testing it
+  on an iPhone made the asymmetry feel wrong: nobody wants to be the one being babysat, and on a night out the
+  designated buddy can just as easily be the one who gets into trouble. We rebuilt it as a fully connected group: every member runs the same risk engine and ladder, and
+  alerts fan out to everyone else.
+- **Phones go quiet in your pocket.** A naive dead-man's switch would alert every time you lock your phone. The app
+  reports "background / locked" before going quiet so the server can distinguish "locked" from "silent".
+- **Audio formats:** iOS records AAC in an `.m4a` container under several MIME labels; we verified Gemini with real
+  `.m4a` files and normalise the type on the server.
 - **Avoiding false alarms** without missing real ones: we tuned weights so no single signal escalates. A fall alone
   just triggers a check-in, and it takes corroboration (a slurred or missed answer) to alert friends. Our end-to-end
   test caught a subtle case where "fall + walking away" crossed the threshold before the person was asked.
@@ -86,12 +93,13 @@ Wingman is a web app (a PWA, with no download and no account) that you start whe
 
 ## Accomplishments that we're proud of
 
-- The full loop works end to end on real phones: passive sensing → spoken AI check-in → explainable risk → three-level
-  escalation → PIN-protected de-escalation.
+- The full loop works end to end on real phones: passive sensing → spoken AI check-in → explainable risk → alerts on
+  every friend's phone → bystander mode → emergency contact → de-escalation by a friend or the PIN.
 - **Gemini hears the difference** between a clear answer and a slurred one from raw audio in about 2 seconds.
 - Every alert explains itself in plain English. There's no mystery score.
-- A tested core: risk-engine and state-machine unit tests, an end-to-end storyline test asserting the exact
-  escalation sequence, and a headless-browser run of every screen that fails on JS errors or layout overflow.
+- A tested core: risk-engine and state-machine unit tests, an end-to-end group storyline test (three WebSocket members)
+  asserting the exact escalation sequence and the fan-out, a live-Gemini test with a real iOS `.m4a`, and a
+  headless-browser run of the stage view that fails on JS errors, overflow, or anything covering the alarm.
 - Privacy that's structural: the server has no database to leak.
 
 ## What we learned
@@ -103,7 +111,7 @@ Wingman is a web app (a PWA, with no download and no account) that you start whe
 
 ## What's next for Wingman
 
-- **Native apps** (iOS/Android) for true background monitoring and OS-level fall detection; the same server and engine.
+- **Android app** and OS-level fall detection (Apple Watch / Wear OS); the same server and engine.
 - **Wearables:** heart rate and skin temperature from watches as extra signals.
 - **Venue partnerships:** bars and campus security as an optional "nearby responder" level.
 - **Text-to-911 / RapidSOS** integration for level 3, with location.
@@ -112,9 +120,8 @@ Wingman is a web app (a PWA, with no download and no account) that you start whe
 
 ## Built with
 
-`typescript` · `bun` · `websockets` · `gemini-api` · `gemini-tts` · `openai` (fallback) · `leaflet` ·
-`openstreetmap` · `web-audio-api` · `devicemotion` · `geolocation` · `mediarecorder` · `speech-synthesis` ·
-`wake-lock-api` · `twilio` · `docker` · `caddy` · `vultr` · `godaddy` · `cloudflare-tunnel` · `playwright`
+`typescript` · `bun` · `react-native` · `expo` · `websockets` · `gemini-api` · `gemini-tts` · `openai` (fallback) · `leaflet` ·
+`openstreetmap` · `web-audio-api` · `twilio` · `docker` · `caddy` · `vultr` · `godaddy` · `cloudflare-tunnel` · `playwright`
 
 ---
 
@@ -122,12 +129,14 @@ Wingman is a web app (a PWA, with no download and no account) that you start whe
 
 | Part | Status |
 |---|---|
-| Fall detection, location, heartbeats, touch, battery, wake lock | **Real**, from the phone's browser sensors |
-| Spoken check-in question + voice recording | **Real** (speech synthesis + MediaRecorder) |
+| Location, motion/falls, heartbeats, app state, battery | **Real**, from the phone |
+| Spoken check-in question + voice recording | **Real** (text-to-speech + recording on the phone) |
 | AI scoring of the voice reply | **Real** Gemini audio understanding (falls back to OpenAI, then an offline heuristic) |
-| Risk engine, escalation ladder, buddy alerts, bystander mode, PIN | **Real** |
-| Level-3 SMS | **Real via Twilio** when keys are configured, otherwise **simulated** and labelled as such in the UI |
-| On-stage storyline | Uses **demo controls** to trigger the walk-away, the fall, and a pre-recorded slurred answer (an AI-generated voice clip) so the 4-minute demo is repeatable. The step-1 live check-in uses the presenter's real voice |
+| Risk engine, per-member ladders, group fan-out, bystander mode, PIN, found & OK | **Real** |
+| Level-3 SMS | **Real via Twilio** when keys are configured, otherwise **simulated** and labelled as such |
+| Push to backgrounded phones | Real via Expo push when enabled (`EXPO_PUSH=1`); otherwise in-app alerts over WebSocket |
+| Sam, Maya and Leo on stage | **Simulated friends** (server-side members that move, heartbeat and answer check-ins). The presenter's phone is a real member |
+| On-stage storyline | Uses **demo controls** to trigger the drift, the fall, and a pre-recorded slurred answer (an AI-generated voice clip) so the 4-minute demo is repeatable. The step-1 check-in uses the presenter's real voice |
 | Timers | Accelerated in demo mode (15 s per level instead of minutes) |
 
 **Links:** GitHub: `<repo URL>` · Live: `https://<domain>` · Demo video: `<YouTube URL>`

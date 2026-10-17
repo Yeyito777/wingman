@@ -54,6 +54,14 @@ export const PROBE_PROMPTS: Record<string, string> = {
   impaired_checkin: "Let's try that again. Tell me slowly: where are you, and who's with you right now?",
   missed_checkin: "Hey, I didn't hear you. Are you okay? Just tell me where you are.",
   offline: "You went quiet for a bit. Are you okay? Tell me where you are.",
-  alert: "Your buddies have been alerted. If you're okay, tell me where you are and who you're with.",
+  alert: "Your friends have been alerted. If you're okay, tell me where you are and who you're with.",
   default: "Hey, just checking on you. Where are you right now, and who are you with?",
 };
+
+/** Member colours, assigned in join order (stable across clients). */
+export const MEMBER_COLORS = ["#7c5cff", "#22c55e", "#f59e0b", "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#a855f7"];
+
+/** A member's fix older than this, or worse than this accuracy, doesn't anchor "the group". */
+export const GROUP_FIX_STALE_MS = 3 * 60_000;
+export const GROUP_FIX_MAX_ACCURACY_M = 150;
+export const MAX_MEMBERS = 12;

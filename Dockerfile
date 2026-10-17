@@ -1,10 +1,11 @@
-# Wingman server: one container, no database (sessions live in memory and are deleted when they end).
+# Wingman server: one container, no database (groups live in memory and are deleted when they end).
 FROM docker.io/oven/bun:1 AS app
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production
 COPY tsconfig.json ./
 COPY src ./src
+COPY shared ./shared
 COPY public ./public
 # Host checkouts may be umask 077; make sure the unprivileged user can read the app.
 RUN chmod -R a+rX /app

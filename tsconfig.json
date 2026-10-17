@@ -12,5 +12,5 @@
     "verbatimModuleSyntax": true,
     "noUncheckedIndexedAccess": false
   },
-  "include": ["src", "tests", "scripts"]
+  "include": ["src", "shared", "tests", "scripts"]
 }
