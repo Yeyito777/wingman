@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View } from "react-native";
+import { Logo } from "../components/Logo";
 import { PinDots, PinPad } from "../components/PinPad";
 import { Button, Field, IconButton, LinkButton, s, Screen, T } from "../components/ui";
 import { PERMISSIONS, request, type PermKey } from "../services/permissions";
@@ -88,8 +89,8 @@ export default function Onboarding() {
     return (
       <Screen>
         <View style={{ flex: 1, paddingHorizontal: 28, justifyContent: "center" }}>
-          <View style={{ width: 72, height: 72, borderRadius: 22, backgroundColor: colors.surface2, alignItems: "center", justifyContent: "center", marginBottom: 28 }}>
-            <Ionicons name="shield-checkmark" size={38} color={colors.text} />
+          <View style={{ marginBottom: 28 }}>
+            <Logo size={76} />
           </View>
           <T v="hero">Your friends,{"\n"}watching your back.</T>
           <T v="body" color={colors.text2} style={{ marginTop: 16, fontSize: 19, lineHeight: 27 }}>

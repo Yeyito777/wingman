@@ -14,7 +14,10 @@
       "supportsTablet": false,
       "icon": "./assets/images/icon.png",
       "infoPlist": {
-        "UIBackgroundModes": ["location", "audio"],
+        "UIBackgroundModes": [
+          "location",
+          "audio"
+        ],
         "NSLocationWhenInUseUsageDescription": "Wingman shares your location with your group tonight so they can find you, and notices if you drift away from them.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Wingman keeps your group able to find you even when your screen is locked. Location is only shared during a night out you started or joined.",
         "NSLocationAlwaysUsageDescription": "Wingman keeps your group able to find you even when your screen is locked.",
@@ -30,7 +33,13 @@
         "backgroundColor": "#000000",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "RECORD_AUDIO", "CAMERA", "VIBRATE"],
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "RECORD_AUDIO",
+        "CAMERA",
+        "VIBRATE"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -59,11 +68,15 @@
       ],
       [
         "expo-sensors",
-        { "motionPermission": "Wingman uses motion to notice a hard fall followed by stillness, so your friends can get to you." }
+        {
+          "motionPermission": "Wingman uses motion to notice a hard fall followed by stillness, so your friends can get to you."
+        }
       ],
       [
         "expo-audio",
-        { "microphonePermission": "Wingman records your short spoken answer to a check-in question so it can tell you're OK. Recordings are scored and deleted." }
+        {
+          "microphonePermission": "Wingman records your short spoken answer to a check-in question so it can tell you're OK. Recordings are scored and deleted."
+        }
       ],
       [
         "expo-camera",
@@ -73,8 +86,14 @@
           "recordAudioAndroid": false
         }
       ],
-      ["expo-notifications", { "enableRemoteNotifications": false }],
-      "expo-secure-store"
+      [
+        "expo-notifications",
+        {
+          "enableRemoteNotifications": false
+        }
+      ],
+      "expo-secure-store",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
