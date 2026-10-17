@@ -164,6 +164,7 @@ export interface SessionView {
   engines: { scorer: string; notifier: string };
   inviteUrl?: string;
   pinLockedUntil?: number;
+  demoAnswerMode?: "canned" | "live";
 }
 
 export type ServerMsg = { t: "view"; view: SessionView } | { t: "ended" } | { t: "error"; error: string };
