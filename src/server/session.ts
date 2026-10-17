@@ -310,6 +310,19 @@ export class Session {
     }
   }
 
+  /** Start a new demo "scene": earlier signals count as cleared and any pending check-in is dropped (log kept). */
+  newScene(now: number) {
+    const p = this.pendingCheckin;
+    if (p && p.status === "pending") {
+      p.status = "done";
+      p.outcome = undefined;
+    }
+    this.clearedAt = now;
+    this.fallAt = null;
+    this.lastMotionAt = now;
+    this.lastInteractionAt = now;
+  }
+
   reset(now: number) {
     this.fallAt = null;
     this.lastMotionAt = now;

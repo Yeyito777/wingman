@@ -153,6 +153,29 @@ try {
   await phone.waitForTimeout(600);
   await shot(phone, "14-phone-resolved");
   await shot(buddy, "15-buddy-resolved");
+
+  // 10. Stage view (projector, 1280x720) driven by clicker keys: a fresh stage-demo session.
+  const r = await (await fetch(`${app.url}/api/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Yeyito", phone: "+14165550123", pin: "1234", medical: "Allergic to penicillin. Asthma: inhaler in left jacket pocket.", contactName: "Mom", contactPhone: "+14165550199", demo: true }) })).json();
+  const stagePage = await (await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1.5 })).newPage();
+  stagePage.on("pageerror", (e) => errors.push(`stage: ${e.message}`));
+  await stagePage.goto(`${app.url}/stage/${r.id}?k=${r.userKey}`);
+  const frame = stagePage.frameLocator("#buddyframe");
+  await frame.locator("#bname").fill("Sam");
+  await frame.locator('button[type="submit"]').click();
+  await frame.locator("#status .title").waitFor();
+  await stagePage.locator("aside").click({ position: { x: 5, y: 5 } });
+  await stagePage.keyboard.press("ArrowRight"); // live check-in (left pending)
+  await stagePage.keyboard.press("ArrowRight"); // new scene + walk away
+  await stagePage.waitForTimeout(1200);
+  await stagePage.keyboard.press("PageDown"); // fall
+  await stagePage.waitForTimeout(300);
+  await stagePage.keyboard.press(" "); // slurred answer (2.5 s scripted delay)
+  await frame.locator("#takeover:not(.hidden)").waitFor({ timeout: 8000 });
+  await stagePage.waitForTimeout(500);
+  await shot(stagePage, "16-stage-view-alert");
+  await frame.locator("#tclose").click();
+  await stagePage.waitForTimeout(2500);
+  await shot(stagePage, "17-stage-view-dashboard");
 } finally {
   await browser.close();
   app.stop();

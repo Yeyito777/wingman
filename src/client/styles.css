@@ -206,3 +206,12 @@ button:disabled { opacity: 0.5; cursor: default; }
 .leaflet-tooltip.pin-label { background: #0b0f19e6; color: white; border: 0; box-shadow: none; font-weight: 700; }
 .leaflet-tooltip.pin-label::before { display: none; }
 .card h2 { white-space: nowrap; }
+.buddy-cols > .stack + .stack { margin-top: 12px; }
+@media (min-width: 880px) {
+  .buddy-wrap { max-width: 1280px; }
+  .buddy-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 16px; align-items: start; }
+  .buddy-cols > .stack + .stack { margin-top: 0; }
+  .buddy-wrap .map { height: 380px; }
+  .alert-ov .big { font-size: 64px; }
+  .alert-ov .reasons li { font-size: 24px; }
+}

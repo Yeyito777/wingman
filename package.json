@@ -5,13 +5,14 @@
   "type": "module",
   "description": "Wingman: an AI night-out guardian that never needs you to press SOS.",
   "scripts": {
-    "dev": "bun --hot src/server/index.ts",
+    "dev": "bun src/server/index.ts",
     "start": "NODE_ENV=production bun src/server/index.ts",
     "test": "bun test",
     "e2e": "bun test tests/e2e.test.ts",
     "typecheck": "tsc --noEmit",
     "tunnel": "bash scripts/tunnel.sh",
-    "screenshots": "bun scripts/screenshots.ts"
+    "screenshots": "bun scripts/screenshots.ts",
+    "dev:watch": "bun --watch src/server/index.ts"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

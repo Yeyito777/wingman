@@ -103,6 +103,7 @@ export function startServer(opts: AppOptions = {}) {
       "/me/:id": userPage,
       "/buddy/:id": buddyPage,
       "/demo/:id": demoPage,
+      "/stage/:id": demoPage,
 
       "/api/health": () => json({ ok: true, scorer: scorerName, engines, notifier: notifier.name, sessions: sessions.size }),
 
@@ -292,6 +293,9 @@ export function startServer(opts: AppOptions = {}) {
             }
             case "resolve":
               s.resolve("demo panel", "manual reset of the alert", now);
+              break;
+            case "scene":
+              s.newScene(now);
               break;
             case "reset":
               s.reset(now);

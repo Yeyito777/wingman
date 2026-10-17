@@ -21,6 +21,11 @@ const st = {
 
 boot();
 
+// Embedded in the stage view: forward presentation-clicker keys to the parent page.
+if (window.parent !== window) {
+  window.addEventListener("keydown", (e: KeyboardEvent) => parent.postMessage({ wingmanKey: e.key, shift: e.shiftKey }, location.origin));
+}
+
 async function boot() {
   if (!id || !key) return renderMessage("This invite link is incomplete.", "Ask your friend to share it again.");
   const saved = JSON.parse(localStorage.getItem(LS) ?? "null");
@@ -95,16 +100,22 @@ function shareLocation() {
 }
 
 function startDashboard() {
-  app.innerHTML = `<div class="wrap">
+  app.innerHTML = `<div class="wrap buddy-wrap">
     <div class="top"><div class="brand"><div class="logo">🪽</div>Wingman</div><div class="row" id="badges"></div></div>
-    <div id="status" class="hero"></div>
-    <div id="actions" class="grid2" style="margin-top:12px"></div>
-    <div class="card" style="margin-top:12px"><h2 id="ladder-h">Escalation</h2><div class="ladder" id="ladder"></div><div class="small muted" id="next" style="margin-top:8px;text-align:center"></div></div>
-    <div class="card" style="margin-top:12px"><div class="row spread"><h2 style="margin:0">Live location</h2><span class="muted small" id="dist"></span></div><div id="map" class="map" style="margin-top:10px"></div><div id="maplink" class="small" style="margin-top:8px"></div></div>
-    <div class="card" style="margin-top:12px" id="check"></div>
-    <div class="card" style="margin-top:12px" id="sms"></div>
-    <div class="card" style="margin-top:12px"><h2>Tonight's log</h2><ul class="log" id="log"></ul></div>
-    <div class="card" style="margin-top:12px"><h2>Watching with you</h2><div id="buddies" class="stack"></div></div>
+    <div class="buddy-cols">
+      <div class="stack">
+        <div id="status" class="hero"></div>
+        <div id="actions" class="grid2"></div>
+        <div class="card"><h2 id="ladder-h">Escalation</h2><div class="ladder" id="ladder"></div><div class="small muted" id="next" style="margin-top:8px;text-align:center"></div></div>
+        <div class="card" id="check"></div>
+        <div class="card" id="sms"></div>
+      </div>
+      <div class="stack">
+        <div class="card"><div class="row spread"><h2 style="margin:0">Live location</h2><span class="muted small" id="dist" style="text-align:right"></span></div><div id="map" class="map" style="margin-top:10px"></div><div id="maplink" class="small" style="margin-top:8px"></div></div>
+        <div class="card"><h2>Tonight's log</h2><ul class="log" id="log"></ul></div>
+        <div class="card"><h2>Watching with you</h2><div id="buddies" class="stack"></div></div>
+      </div>
+    </div>
     <p class="small muted" style="text-align:center;margin-top:16px">🔒 Location is visible only during this session or an alert, and is deleted when the night ends.</p>
   </div>
   <div id="takeover" class="overlay alert-ov hidden"></div>`;
