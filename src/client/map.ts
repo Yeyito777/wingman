@@ -1,4 +1,4 @@
-// Live map: the person, their buddies and the venue. Dark OSM tiles; markers are pure CSS (no image assets).
+// Live map: the person, their buddies and the venue. OSM tiles (darkened in CSS); markers are pure CSS (no image assets).
 
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -7,9 +7,9 @@ import { esc } from "./common.ts";
 
 export function createMap(el: HTMLElement) {
   const map = L.map(el, { zoomControl: false, attributionControl: true }).setView([43.7845, -79.1875], 16);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CARTO',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
   let user: L.Marker | null = null;
   let acc: L.Circle | null = null;

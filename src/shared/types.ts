@@ -157,6 +157,7 @@ export interface SessionView {
     battery: number | null;
     sensors: { motion: string; location: string; mic: string };
     offlineSimulated: boolean;
+    backgrounded: boolean;
     walking: boolean;
   };
   events: LogEvent[];

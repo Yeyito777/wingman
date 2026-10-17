@@ -79,6 +79,8 @@ export class Session {
   geofenceSince: number | null = null;
   walk: Walk | null = null;
   offlineSimulated = false;
+  /** the phone said it was going to the background (screen locked / app switched) before going quiet */
+  backgrounded = false;
 
   checkins: Checkin[] = [];
   lastCheckinAskedAt: number;
@@ -123,6 +125,7 @@ export class Session {
   heartbeat(now: number, battery?: number | null) {
     if (this.offlineSimulated) return;
     this.lastHeartbeatAt = now;
+    this.backgrounded = false;
     if (typeof battery === "number") this.battery = battery;
   }
 
@@ -134,6 +137,14 @@ export class Session {
   interaction(now: number) {
     if (this.offlineSimulated) return;
     this.lastInteractionAt = now;
+  }
+
+  /** Screen locked / tab hidden: stop treating silence as alarming (browsers suspend background pages). */
+  background(now: number) {
+    if (this.offlineSimulated || this.backgrounded) return;
+    this.backgrounded = true;
+    this.lastHeartbeatAt = now;
+    this.log("signal", `${this.user.name}'s phone went to the background (screen locked). Passive sensing pauses until it's back.`, now);
   }
 
   setSensors(s: Partial<Session["sensors"]>) {
@@ -288,6 +299,7 @@ export class Session {
 
   setOffline(on: boolean, now: number) {
     this.offlineSimulated = on;
+    this.backgrounded = false;
     if (on) {
       // Make the dead-man's switch fire a few seconds from now rather than after the full timeout.
       this.lastHeartbeatAt = Math.min(this.lastHeartbeatAt ?? now, now - this.timers.heartbeatLostMs + 4000);
@@ -371,7 +383,8 @@ export class Session {
       fallAt: this.fallAt,
       lastMotionAt: this.lastMotionAt,
       lastInteractionAt: this.lastInteractionAt,
-      lastHeartbeatAt: this.lastHeartbeatAt,
+      // A phone that said "going to background" isn't a dead-man's-switch trigger; one that just died is.
+      lastHeartbeatAt: this.backgrounded ? null : this.lastHeartbeatAt,
       awayM: away,
       awaySince: this.awaySince,
       awayFrom: g?.from ?? "venue",
@@ -532,6 +545,7 @@ export class Session {
         battery: this.battery,
         sensors: this.sensors,
         offlineSimulated: this.offlineSimulated,
+        backgrounded: this.backgrounded,
         walking: !!this.walk,
       },
       events: this.events.slice(-60),

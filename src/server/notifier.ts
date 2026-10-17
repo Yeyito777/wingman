@@ -27,7 +27,7 @@ function simulated(): Notifier {
     name: "simulated",
     async send(a) {
       console.log(`[notifier] SIMULATED SMS to ${a.toName} <${a.to}>: ${a.body}`);
-      return [{ at: Date.now(), channel: "sms", to: a.to, toName: a.toName, body: a.body, simulated: true, ok: true, detail: "simulated (no Twilio configured)" }];
+      return [{ at: Date.now(), channel: "sms", to: a.to, toName: a.toName, body: a.body, simulated: true, ok: true, detail: "simulated; Twilio not configured" }];
     },
   };
 }

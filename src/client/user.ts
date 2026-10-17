@@ -201,6 +201,11 @@ function startHeartbeat() {
   for (const ev of ["pointerdown", "keydown", "touchstart"]) addEventListener(ev, () => (st.pending.interaction = true), { passive: true });
   setInterval(() => sendSignals(true), 5000);
   sendSignals(true);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      navigator.sendBeacon?.(`/api/s/${st.id}/signal?k=${encodeURIComponent(st.key)}`, new Blob([JSON.stringify({ hidden: true })], { type: "text/plain" }));
+    } else sendSignals(true);
+  });
 }
 
 let lastFixSent = 0;

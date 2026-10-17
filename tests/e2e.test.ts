@@ -217,3 +217,23 @@ describe("end-to-end demo storyline", () => {
     }
   }, 30_000);
 });
+
+describe("dead-man's switch", () => {
+  test("a phone that dies counts; a phone that was locked (backgrounded) does not", async () => {
+    const r = await call("/api/sessions", "", { name: "Yeyito", pin: "1234", demo: true });
+    const { id, userKey } = r.body;
+    await call(`/api/s/${id}/settings`, userKey, { timers: { heartbeatLostMs: 300 } });
+    await call(`/api/s/${id}/signal`, userKey, { hb: true });
+    await Bun.sleep(450);
+    let v = (await call(`/api/s/${id}`, userKey)).body as SessionView;
+    expect(v.risk.reasons.map((x) => x.code)).toContain("offline");
+    // Screen locked: the page says so before going quiet (sendBeacon, text/plain body).
+    await call(`/api/s/${id}/signal`, userKey, { hb: true });
+    await fetch(`${app.url}/api/s/${id}/signal?k=${userKey}`, { method: "POST", headers: { "content-type": "text/plain" }, body: JSON.stringify({ hidden: true }) });
+    await Bun.sleep(450);
+    v = (await call(`/api/s/${id}`, userKey)).body as SessionView;
+    expect(v.signals.backgrounded).toBe(true);
+    expect(v.risk.reasons.map((x) => x.code)).not.toContain("offline");
+    await call(`/api/s/${id}/end`, userKey, {});
+  });
+});

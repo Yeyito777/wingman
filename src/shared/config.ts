@@ -26,7 +26,7 @@ export const DEMO_TIMERS: Timers = {
   fallWindowMs: 10 * MIN,
   stillnessMs: 10 * MIN,
   untouchedMs: 30 * MIN,
-  heartbeatLostMs: 30 * S,
+  heartbeatLostMs: 60 * S,
   l1ToL2Ms: 15 * S,
   l2ToL3Ms: 15 * S,
   ackHoldMs: 60 * S,

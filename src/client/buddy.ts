@@ -126,7 +126,7 @@ function onView(v: SessionView) {
   const title = v.stage > 0 ? `${name} may need help` : level === "watch" ? `Keeping an eye on ${name}` : `${name} is OK`;
   const icon = v.stage > 0 ? "🚨" : level === "watch" ? "👀" : "✓";
   s.innerHTML = `<div class="ring">${icon}</div><div class="title" style="font-size:${v.stage > 0 ? 32 : 28}px">${title}</div>
-    ${v.risk.reasons.length ? `<ul class="reasons">${v.risk.reasons.map((r) => `<li>${reasonIcon(r.code)} ${esc(cap(r.text))}<span class="w">+${r.weight}</span></li>`).join("")}</ul>` : `<div class="sub">No warning signs · last heard from ${ago(v.signals.lastHeartbeatAt)}</div>`}
+    ${v.risk.reasons.length ? `<ul class="reasons">${v.risk.reasons.map((r) => `<li>${reasonIcon(r.code)} ${esc(cap(r.text))}<span class="w">+${r.weight}</span></li>`).join("")}</ul>` : `<div class="sub">No warning signs · ${v.signals.backgrounded ? "phone locked / in pocket" : `last heard from ${ago(v.signals.lastHeartbeatAt)}`}</div>`}
     <div class="meter"><div style="width:${v.risk.score}%"></div></div><div class="small muted" style="margin-top:6px">risk ${v.risk.score}/100</div>`;
 
   // Actions
@@ -265,7 +265,7 @@ function renderTakeover(v: SessionView, prev: SessionView | null) {
   patch(
     $("#treasons"),
     `<ul class="reasons">${v.risk.reasons.map((r) => `<li>${reasonIcon(r.code)} ${esc(cap(r.text))}</li>`).join("") || `<li>🚩 Alert raised manually</li>`}</ul>
-    ${v.fix ? `<div style="text-align:center;margin-top:12px;font-weight:700">📍 ${fmtM(v.distanceFromGroupM)} from the group · <a style="color:white" target="_blank" href="https://maps.google.com/?q=${v.fix.lat},${v.fix.lng}">directions</a></div>` : ""}`,
+    ${v.fix ? `<div style="text-align:center;margin-top:12px;font-weight:700"><a style="color:white" target="_blank" href="https://maps.google.com/?q=${v.fix.lat},${v.fix.lng}">📍 Get directions to ${esc(v.user.name)} →</a></div>` : ""}`,
   );
   el.classList.remove("hidden");
   renderTicking(v);

@@ -131,12 +131,13 @@ export function startServer(opts: AppOptions = {}) {
 
       "/api/s/:id/signal": {
         POST: api("any", async (s, req, role) => {
-          const b: any = await req.json();
+          const b: any = JSON.parse((await req.text()) || "{}");
           const now = Date.now();
           if (role === "buddy") {
             if (b.fix) s.buddyFix(String(b.buddyId), now, b.fix);
             return json({ ok: true });
           }
+          if (b.hidden) s.background(now);
           if (b.hb) s.heartbeat(now, b.battery);
           if (b.motion) s.motion(now);
           if (b.interaction) s.interaction(now);

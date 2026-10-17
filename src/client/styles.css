@@ -191,3 +191,18 @@ button:disabled { opacity: 0.5; cursor: default; }
 .sms .meta { font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
 .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: #111827; border: 1px solid var(--line); padding: 12px 18px; border-radius: 14px; z-index: 100; font-weight: 700; box-shadow: 0 10px 30px #000a; }
 .conn { position: fixed; top: 0; left: 0; right: 0; background: #78350f; color: #fde68a; text-align: center; font-size: 13px; font-weight: 700; padding: 4px; z-index: 120; }
+
+/* ---------- overflow guards (grid/flex children must be allowed to shrink) ---------- */
+.grid2 > *, .ladder > *, .sensors > *, #cols > *, .overlay > * { min-width: 0; }
+.reasons li, .log li span, .sms, .card, .rung { overflow-wrap: break-word; }
+.reasons li .w { flex: none; }
+.rung { padding: 10px 4px; }
+.rung b { font-size: 14px; }
+/* OSM raster tiles, darkened to match the theme (no API key needed). */
+.leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.6); }
+.toast { width: max-content; max-width: 90vw; text-align: center; }
+.top { flex-wrap: wrap; gap: 8px; }
+.top .row { flex-wrap: wrap; justify-content: flex-end; }
+.leaflet-tooltip.pin-label { background: #0b0f19e6; color: white; border: 0; box-shadow: none; font-weight: 700; }
+.leaflet-tooltip.pin-label::before { display: none; }
+.card h2 { white-space: nowrap; }

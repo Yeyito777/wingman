@@ -32,7 +32,7 @@ function start() {
   app.innerHTML = `<div class="wrap wide">
     <div class="top"><div class="brand"><div class="logo">🪽</div>Wingman <span class="muted" style="font-weight:600">demo control</span></div>
       <div class="row"><span class="badge demo">DEMO</span><span class="badge" id="engines"></span></div></div>
-    <div style="display:grid;grid-template-columns:minmax(320px,1.1fr) minmax(320px,1fr);gap:14px;align-items:start" id="cols">
+    <div style="display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:14px;align-items:start" id="cols">
       <div class="stack">
         <div class="card"><h2>Storyline</h2>
           <div class="grid2" id="steps">${STEPS.map(([a, l, h, c]) => `<button class="${c}" data-a="${a}" title="${esc(h)}" style="flex-direction:column;gap:2px">${l}${h ? `<span class="small" style="font-weight:600;opacity:.75">${esc(h)}</span>` : ""}</button>`).join("")}</div>
