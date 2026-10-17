@@ -3,7 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import { Group, type GroupHooks } from "../src/server/group.ts";
 import type { PushMessage } from "../src/server/push.ts";
-import { offset } from "../src/shared/geo.ts";
+import { haversineM, offset } from "../src/shared/geo.ts";
 import type { ServerMsg } from "../src/shared/types.ts";
 
 const HERE = { lat: 43.6487, lng: -79.3962 };
@@ -81,4 +81,34 @@ describe("group engine", () => {
     expect(v.emergencyContact.phone).toBe("+14165550199");
     expect(g.view(b.id, 3_000).alerts.map((x) => x.memberId)).toEqual([a.id]);
   });
+
+  test("demo: simulated friends gather around the real phone, even 30 km from the default venue or with a coarse fix", () => {
+    const hooks = harness().g.hooks;
+    const GERSTEIN = { lat: 43.6623, lng: -79.3941 };
+    for (const accuracy of [35, 1500]) {
+      const g = new Group("DEMO01", { demo: true }, hooks, 1_000);
+      const sam = g.addMember({ name: "Sam", pin: "0000", consent: true }, 1_000, true);
+      expect(g.name).toBe(""); // simulated friends don't name the group
+      const me = g.addMember({ name: "Yeyito", pin: "1234", consent: true }, 1_000);
+      expect(g.name).toBe("Yeyito's night out");
+      g.setFix(me, { ...GERSTEIN, accuracy }, 2_000);
+      const samAt = g.position(sam, 2_000)!;
+      expect(haversineM(samAt, GERSTEIN)).toBeLessThan(100);
+      const v = g.view(null, 2_000).members.find((m) => m.id === me.id)!;
+      expect(v.fix).not.toBeNull(); // the stage view gets the phone's pin
+    }
+  });
+
+  test("demo: the venue doesn't chase the phone during a simulated walk", () => {
+    const { g: base } = harness();
+    const g = new Group("DEMO02", { demo: true }, base.hooks, 1_000);
+    g.addMember({ name: "Sam", pin: "0000", consent: true }, 1_000, true);
+    const me = g.addMember({ name: "Yeyito", pin: "1234", consent: true }, 1_000);
+    g.setFix(me, { ...HERE, accuracy: 20 }, 2_000);
+    const venue = { ...g.venue! };
+    g.startWalk(me, 3_000);
+    g.setFix(me, { ...offset(HERE, 5000, 90), accuracy: 20 }, 4_000);
+    expect(g.venue!.lat).toBe(venue.lat);
+  });
 });
+

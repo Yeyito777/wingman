@@ -211,7 +211,7 @@ export function startServer(opts: AppOptions = {}) {
         POST: async (req: Request) => {
           const b = ((await body(req).catch(() => ({}))) ?? {}) as CreateDemoRequest;
           const friends = Array.isArray(b.friends) && b.friends.length ? b.friends.map(String).slice(0, 6) : DEMO_FRIENDS;
-          const g = createGroup(req, { name: b.presenterName ? `${b.presenterName}'s night out` : "Friday night out", demo: true });
+          const g = createGroup(req, { name: b.presenterName ? `${b.presenterName}'s night out` : "", demo: true });
           const now = Date.now();
           for (const name of friends) {
             g.addMember({ name, pin: "0000", consent: true, medical: DEMO_MEDICAL[name] ?? "", emergencyContact: { name: name === "Maya" ? "Her mom" : "Mom", phone: "+1 416 555 0199" } }, now, true);

@@ -66,6 +66,10 @@ interface Walk {
 }
 
 const MAX_EVENTS = 300;
+/** Demo groups: re-gather the simulated friends around a real phone that's this far from the venue… */
+const DEMO_REGATHER_M = 1000;
+/** …as long as its fix is at least this good (iOS "approximate location" is a few km). */
+const DEMO_REGATHER_MAX_ACCURACY_M = 5000;
 
 export const CANNED = {
   slurred: "Uhh... m'fine... I'm at the... the place wi' the... lights. I dunno... where's Sam...",
@@ -190,7 +194,8 @@ export class Group {
       m.battery = 0.4 + Math.random() * 0.5;
     }
     this.members.set(m.id, m);
-    if (!this.name) this.name = `${m.name}'s night out`;
+    // The group is named after the first real person in it (simulated demo friends don't count).
+    if (!this.name && !simulated) this.name = `${m.name}'s night out`;
     const loc = m.shareLocation === "always" ? "shares location with the group all night" : "shares location only if an alert fires";
     this.log("privacy", `${m.name} joined${simulated ? " [simulated friend]" : ""}: guarded by everyone, guarding everyone. ${m.name} ${loc}; everything is deleted when the night ends.`, m.id, now);
     this.hooks.send(this, "all", () => ({ t: "member", event: "joined", memberId: m.id, name: m.name }));
@@ -244,10 +249,17 @@ export class Group {
 
   setFix(m: Member, f: { lat: number; lng: number; accuracy: number }, now: number) {
     m.realFix = { ...f, at: now };
-    if ((!this.venue || this.venueIsDefault) && f.accuracy <= 200 && !m.walk && !m.simulated) {
+    if (m.simulated || m.walk) return;
+    if ((!this.venue || this.venueIsDefault) && f.accuracy <= 200) {
       this.venue = { ...m.realFix };
       this.venueIsDefault = false;
       this.log("info", `Venue set to where the night started (±${Math.round(f.accuracy)} m, from ${m.name}'s phone).`, undefined, now);
+    } else if (this.demo && this.venue && f.accuracy <= DEMO_REGATHER_MAX_ACCURACY_M && haversineM(this.venue, f) > DEMO_REGATHER_M) {
+      // Demo: the simulated friends stand around the venue, so it follows the real phone. This also covers a phone
+      // that only has a coarse fix (iOS "Precise Location" off) and one far from the default venue.
+      this.venue = { ...m.realFix };
+      this.venueIsDefault = false;
+      this.log("info", `The simulated friends gathered around ${m.name}'s phone (±${Math.round(f.accuracy)} m).`, undefined, now);
     }
   }
 
@@ -417,7 +429,7 @@ export class Group {
       m.scripted = false;
     }
     // Re-anchor the venue on a real phone, so simulated friends stand right next to it.
-    const real = [...this.members.values()].find((m) => !m.simulated && m.realFix && m.realFix.accuracy <= 200);
+    const real = [...this.members.values()].find((m) => !m.simulated && m.realFix && m.realFix.accuracy <= DEMO_REGATHER_MAX_ACCURACY_M);
     if (real?.realFix) this.venue = { ...real.realFix };
     this.events = [];
     this.notifications = [];
