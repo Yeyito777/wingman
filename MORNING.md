@@ -43,7 +43,10 @@ on the laptop **Open stage view**, join as "Sam", then press → five times whil
   deterministic). Step 1's check-in uses your real voice + Gemini.
 - ⚠️ The fall threshold (2.6 g + stillness) is tuned by reasoning, not tested on a real drop. Try dropping the phone
   onto a bed. If it's flaky, use the button.
-- ⚠️ No OpenAI fallback run tonight (Gemini is primary; the code path exists).
+- ⚠️ **The OpenAI key has no credits** (HTTP 429 when tested). The fallback chain handled it correctly (→ mock), but
+  effectively it's Gemini → offline mock. Note that `OPENAI_API_KEY` is also exported in your shell, so a plain
+  `bun run dev` puts OpenAI first. **Always start with `secrets run --allow GEMINI_API_KEY -- bun run dev`** (Gemini
+  goes first when its key is present), or set `SCORER=gemini`.
 
 ## Things only you can do
 
