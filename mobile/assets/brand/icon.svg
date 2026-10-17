@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="30%" r="80%">
+      <stop offset="0" stop-color="#2A2F5C"/>
+      <stop offset="0.55" stop-color="#11132A"/>
+      <stop offset="1" stop-color="#05060D"/>
+    </radialGradient>
+    <linearGradient id="wing" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#C9D2FF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <!-- two wings meeting in the middle: each friend shelters the other -->
+  <g fill="url(#wing)">
+    <path d="M500 760 C 420 690, 300 640, 210 520 C 170 466, 150 400, 158 330 C 210 392, 270 420, 330 432 C 300 400, 282 360, 280 312 C 330 360, 380 382, 430 392 C 410 362, 400 330, 402 290 C 450 352, 492 420, 506 520 Z"/>
+    <path d="M524 760 C 604 690, 724 640, 814 520 C 854 466, 874 400, 866 330 C 814 392, 754 420, 694 432 C 724 400, 742 360, 744 312 C 694 360, 644 382, 594 392 C 614 362, 624 330, 622 290 C 574 352, 532 420, 518 520 Z" opacity="0.82"/>
+  </g>
+</svg>

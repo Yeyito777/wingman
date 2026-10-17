@@ -1,0 +1,106 @@
+{
+  "expo": {
+    "name": "Wingman",
+    "slug": "wingman",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "wingman",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
+    "ios": {
+      "bundleIdentifier": "dev.yeyito.wingman",
+      "appleTeamId": "6BHWAL2UBU",
+      "supportsTablet": false,
+      "icon": "./assets/images/icon.png",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "location",
+          "audio"
+        ],
+        "NSLocationWhenInUseUsageDescription": "Wingman shares your location with your group tonight so they can find you, and notices if you drift away from them.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Wingman keeps your group able to find you even when your screen is locked. Location is only shared during a night out you started or joined.",
+        "NSLocationAlwaysUsageDescription": "Wingman keeps your group able to find you even when your screen is locked.",
+        "NSMotionUsageDescription": "Wingman uses motion to notice a hard fall followed by stillness, so your friends can get to you.",
+        "NSMicrophoneUsageDescription": "Wingman records your short spoken answer to a check-in question so it can tell you're OK. Recordings are scored and deleted.",
+        "NSCameraUsageDescription": "Wingman uses the camera to scan a friend's QR code to join their night out.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "dev.yeyito.wingman",
+      "adaptiveIcon": {
+        "backgroundColor": "#000000",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "RECORD_AUDIO",
+        "CAMERA",
+        "VIBRATE"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/favicon.png",
+      "backgroundColor": "#000000"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#000000",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 96
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Wingman shares your location with your group tonight so they can find you, and notices if you drift away from them.",
+          "locationAlwaysAndWhenInUsePermission": "Wingman keeps your group able to find you even when your screen is locked. Location is only shared during a night out you started or joined.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Wingman uses motion to notice a hard fall followed by stillness, so your friends can get to you."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Wingman records your short spoken answer to a check-in question so it can tell you're OK. Recordings are scored and deleted."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Wingman uses the camera to scan a friend's QR code to join their night out.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "enableRemoteNotifications": false
+        }
+      ],
+      "expo-secure-store",
+      "expo-asset"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "serverUrl": "https://wednesday-astrology-caring-installing.trycloudflare.com"
+    }
+  }
+}
