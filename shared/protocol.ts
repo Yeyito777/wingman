@@ -7,7 +7,7 @@
 // affected member's phone (L2), then that member's emergency contact is notified (L3). Several members can be in
 // alert at once.
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /** Join codes: 6 chars from this alphabet (no 0/O/1/I/L), case-insensitive on input. */
 export const JOIN_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -243,6 +243,8 @@ export interface MemberView {
   lastCheckin: Checkin | null;
   signals: MemberSignals;
   shareLocation: ShareLocation;
+  /** the member's own phone number from MemberSetup.phone ("" if not given); visible to the whole group (v2) */
+  phone: string;
   /** Revealed to others only while this member is in alert; always to yourself. Empty string when hidden. */
   medical: string;
   emergencyContact: { name: string; /** masked ("•••••••99") for others outside an alert */ phone: string };
@@ -459,6 +461,7 @@ export interface PushTokenRequest {
 /** POST /api/groups/:code/members/:id/settings (only for yourself) */
 export interface MemberSettingsRequest {
   shareLocation?: ShareLocation;
+  phone?: string;
   medical?: string;
   emergencyContact?: { name: string; phone: string };
 }

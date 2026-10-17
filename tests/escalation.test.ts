@@ -46,39 +46,40 @@ describe("escalation ladder", () => {
       { type: "tick", now: t1 + T.l1ToL2Ms + T.l2ToL3Ms },
       { type: "tick", now: t1 + 10 * T.l2ToL3Ms },
     ]);
-    expect(effects).toEqual(["alertBuddies", "probe", "bystander", "notifyContact"]);
+    expect(effects).toEqual(["alertGroup", "probe", "bystander", "notifyContact"]);
     expect(s.stage).toBe(3);
     expect(s.nextAt).toBeNull();
   });
 
-  test("a buddy ack pauses the ladder for ackHoldMs, then it resumes", () => {
+  test("an on-my-way ack pauses the ladder for ackHoldMs, then it resumes", () => {
     const t1 = 10_000;
     const ackAt = t1 + 5_000;
     const { s, effects } = run([
       { type: "risk", now: t1, risk: risk("alert") },
-      { type: "ack", now: ackAt, by: "Sam" },
+      { type: "ack", now: ackAt, by: "m_sam", byName: "Sam" },
       { type: "tick", now: t1 + T.l1ToL2Ms },
     ]);
     expect(s.stage).toBe(1);
-    expect(s.acks).toEqual([{ name: "Sam", at: ackAt }]);
-    expect(effects).toEqual(["alertBuddies", "probe", "paused"]);
+    expect(s.acks).toEqual([{ by: "m_sam", byName: "Sam", kind: "on_my_way", at: ackAt }]);
+    expect(s.startedAt).toBe(t1);
+    expect(effects).toEqual(["alertGroup", "probe", "paused"]);
     const later = step(s, { type: "tick", now: ackAt + T.ackHoldMs }, T);
     expect(later.state.stage).toBe(2);
     expect(later.effects.map((e) => e.type)).toEqual(["bystander"]);
   });
 
-  test("repeated acks from the same buddy are deduplicated", () => {
+  test("repeated acks from the same member are deduplicated", () => {
     const { s } = run([
       { type: "risk", now: 0, risk: risk("alert") },
-      { type: "ack", now: 1, by: "Sam" },
-      { type: "ack", now: 2, by: "Sam" },
-      { type: "ack", now: 3, by: "Alex" },
+      { type: "ack", now: 1, by: "m_sam", byName: "Sam" },
+      { type: "ack", now: 2, by: "m_sam", byName: "Sam" },
+      { type: "ack", now: 3, by: "m_alex", byName: "Alex" },
     ]);
-    expect(s.acks.map((a) => a.name)).toEqual(["Sam", "Alex"]);
+    expect(s.acks.map((a) => a.byName)).toEqual(["Sam", "Alex"]);
   });
 
   test("acks are ignored while monitoring", () => {
-    const { s, effects } = run([{ type: "ack", now: 1, by: "Sam" }]);
+    const { s, effects } = run([{ type: "ack", now: 1, by: "m_sam", byName: "Sam" }]);
     expect(s.acks).toEqual([]);
     expect(effects).toEqual([]);
   });
@@ -91,7 +92,7 @@ describe("escalation ladder", () => {
       { type: "escalate", now: 4, by: "Sam" },
     ]);
     expect(s.stage).toBe(3);
-    expect(effects).toEqual(["alertBuddies", "probe", "bystander", "notifyContact"]);
+    expect(effects).toEqual(["alertGroup", "probe", "bystander", "notifyContact"]);
   });
 
   test("resolve returns to monitoring from any level", () => {
@@ -112,6 +113,6 @@ describe("escalation ladder", () => {
       { type: "risk", now: 2, risk: risk("watch") },
     ]);
     expect(s.stage).toBe(1);
-    expect(effects).toEqual(["alertBuddies", "probe"]);
+    expect(effects).toEqual(["alertGroup", "probe"]);
   });
 });

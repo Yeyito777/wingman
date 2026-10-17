@@ -1,13 +1,14 @@
-// End-to-end: a real server, a simulated phone and a simulated buddy over HTTP + WebSocket,
-// driving the on-stage storyline and asserting the escalation sequence.
+// End-to-end: a real server and several group members connected over HTTP + WebSocket (the same protocol the
+// iPhone app speaks), driving the stage storyline and asserting the escalation sequence and the alert fan-out.
 // Uses the deterministic mock scorer so it never touches a rate-limited AI API.
-// Set E2E_LIVE_AI=1 (with GEMINI_API_KEY or OPENAI_API_KEY) to also push one real voice clip through the live scorer.
+// Set E2E_LIVE_AI=1 (with GEMINI_API_KEY) to also push one real iOS-style .m4a clip through Gemini.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { startServer } from "../src/server/app.ts";
-import { availableEngines } from "../src/server/scorer.ts";
+import { availableEngines, geminiMime } from "../src/server/scorer.ts";
 import { DEMO_TIMERS } from "../src/shared/config.ts";
-import type { SessionView } from "../src/shared/types.ts";
+import { STORY } from "../src/shared/story.ts";
+import { parseJoinLink, type GroupView, type JoinResponse, type MemberView, type ServerMsg } from "../shared/protocol.ts";
 
 let app: ReturnType<typeof startServer>;
 
@@ -17,28 +18,53 @@ beforeAll(() => {
 afterAll(() => app.stop());
 
 const FAST = { l1ToL2Ms: 1500, l2ToL3Ms: 1500, checkinTimeoutMs: 5000, ackHoldMs: 60_000, probeCooldownMs: 300, fallConfirmMs: 500 };
+const VENUE = { lat: 43.6487, lng: -79.3962 };
 
 async function call(path: string, key: string, body?: unknown, headers: Record<string, string> = {}) {
+  const raw = body instanceof Uint8Array;
   const res = await fetch(app.url + path, {
     method: body === undefined ? "GET" : "POST",
-    headers: { "x-wingman-key": key, ...(body instanceof Uint8Array ? {} : { "content-type": "application/json" }), ...headers },
-    body: body === undefined ? undefined : body instanceof Uint8Array ? (body as BodyInit) : JSON.stringify(body),
+    headers: { ...(key ? { authorization: `Bearer ${key}` } : {}), ...(raw ? {} : { "content-type": "application/json" }), ...headers },
+    body: body === undefined ? undefined : raw ? (body as BodyInit) : JSON.stringify(body),
   });
   return { status: res.status, body: (await res.json().catch(() => ({}))) as any };
 }
 
-/** A WebSocket client that keeps the latest view and the history of escalation stages it saw. */
-function client(sid: string, key: string, extra: Record<string, string> = {}) {
-  const ws = new WebSocket(`${app.url.replace("http", "ws")}/ws?${new URLSearchParams({ s: sid, k: key, ...extra })}`);
-  const c = { ws, view: null as SessionView | null, stages: [] as number[], ended: false };
-  ws.onmessage = (e) => {
-    const m = JSON.parse(String(e.data));
-    if (m.t === "ended") c.ended = true;
-    if (m.t !== "view") return;
-    c.view = m.view;
-    if (c.stages.at(-1) !== m.view.stage) c.stages.push(m.view.stage);
+/** A member's phone: WebSocket with the latest view, every discrete message, and the stage history per member. */
+function phone(j: { code: string; memberId?: string; key: string }) {
+  const q = new URLSearchParams({ g: j.code, k: j.key, ...(j.memberId ? { m: j.memberId } : {}) });
+  const ws = new WebSocket(`${app.url.replace("http", "ws")}/ws?${q}`);
+  const p = {
+    ws,
+    id: j.memberId ?? null,
+    key: j.key,
+    view: null as GroupView | null,
+    msgs: [] as ServerMsg[],
+    stages: new Map<string, number[]>(),
+    member(id: string) {
+      return p.view?.members.find((m) => m.id === id) as MemberView | undefined;
+    },
+    of(t: ServerMsg["t"]) {
+      return p.msgs.filter((m) => m.t === t) as any[];
+    },
+    send(msg: unknown) {
+      ws.send(JSON.stringify(msg));
+    },
   };
-  return c;
+  ws.onmessage = (e) => {
+    const m = JSON.parse(String(e.data)) as ServerMsg;
+    p.msgs.push(m);
+    if (m.t === "hello" || m.t === "view") {
+      p.view = m.view;
+      for (const mv of m.view.members) {
+        const h = p.stages.get(mv.id) ?? [];
+        const s = mv.alert?.stage ?? 0;
+        if (h.at(-1) !== s) h.push(s);
+        p.stages.set(mv.id, h);
+      }
+    }
+  };
+  return p;
 }
 
 async function until<T>(what: string, fn: () => T | null | undefined | false, ms = 6000): Promise<T> {
@@ -51,209 +77,336 @@ async function until<T>(what: string, fn: () => T | null | undefined | false, ms
   throw new Error(`timed out waiting for: ${what}`);
 }
 
-async function newSession(over: Record<string, unknown> = {}) {
-  const r = await call("/api/sessions", "", {
-    name: "Yeyito",
-    phone: "+14165550123",
-    pin: "1234",
-    medical: "Allergic to penicillin",
-    contactName: "Mom",
-    contactPhone: "+14165550199",
-    demo: true,
-    ...over,
-  });
-  expect(r.status).toBe(200);
-  const { id, userKey, inviteKey } = r.body;
-  await call(`/api/s/${id}/settings`, userKey, { timers: FAST });
-  return { id, userKey, inviteKey };
+const setup = (name: string, over: Record<string, unknown> = {}) => ({
+  name,
+  pin: "1234",
+  consent: true,
+  medical: `${name}: allergic to penicillin`,
+  emergencyContact: { name: `${name}'s mom`, phone: "+14165550199" },
+  ...over,
+});
+
+async function newGroup(names: string[], opts: { demo?: boolean; over?: Record<string, unknown> } = {}) {
+  const c = await call("/api/groups", "", { groupName: "Friday at the Rex", demo: opts.demo ?? true, member: setup(names[0]!, opts.over) });
+  expect(c.status).toBe(200);
+  const joins: JoinResponse[] = [c.body];
+  for (const n of names.slice(1)) {
+    const j = await call(`/api/groups/${c.body.code.toLowerCase()}/join`, "", setup(n));
+    expect(j.status).toBe(200);
+    joins.push(j.body);
+  }
+  if (opts.demo ?? true) expect((await call(`/api/groups/${c.body.code}/demo/timers`, c.body.key, { timers: FAST })).status).toBe(200);
+  return { code: c.body.code as string, joins };
 }
 
-describe("end-to-end demo storyline", () => {
-  test("walk away → fall → slurred check-in → L1 → L2 → L3 → buddy ack → PIN resolves → end deletes", async () => {
-    const { id, userKey, inviteKey } = await newSession();
-    const phone = client(id, userKey);
-    await until("phone connected", () => phone.view);
+const fixNear = (i: number) => ({ heartbeat: true, appState: "foreground", battery: 0.8, fix: { lat: VENUE.lat + i * 0.00003, lng: VENUE.lng, accuracy: 10 }, sensors: { motion: "on", location: "on", mic: "on" } });
 
-    // The phone reports in.
-    await call(`/api/s/${id}/signal`, userKey, { hb: true, battery: 81, motion: true, fix: { lat: 43.78446, lng: -79.18747, accuracy: 12 }, sensors: { motion: "on", location: "on", mic: "on" } });
+describe("group storyline (3 real WebSocket members)", () => {
+  test("drift → fall → slurred → everyone else alerted → L2 → L3 → friend acks → wrong PIN → found & OK → end deletes", async () => {
+    const { code, joins } = await newGroup(["Maya", "Sam", "Leo"]);
+    const [maya, sam, leo] = joins.map((j) => phone(j));
+    await until("all connected", () => maya!.view && sam!.view && leo!.view);
+    const M = joins[0]!.memberId;
+    const S = joins[1]!.memberId;
 
-    // A buddy joins from the share link.
-    const join = await call(`/api/s/${id}/join`, inviteKey, { name: "Sam" });
-    expect(join.status).toBe(200);
-    const buddy = client(id, inviteKey, { b: join.body.buddyId });
-    await until("buddy sees Sam online", () => buddy.view?.buddies.find((b) => b.name === "Sam" && b.online));
-    expect(buddy.view!.user.medical).toBe(""); // medical info stays private until an alert
-    expect(buddy.view!.inviteUrl).toBeUndefined();
+    // Everyone reports a position next to each other (REST for two, WS for one).
+    await call(`/api/groups/${code}/members/${M}/signals`, maya!.key, fixNear(0));
+    await call(`/api/groups/${code}/members/${S}/signals`, sam!.key, fixNear(1));
+    leo!.send({ t: "signals", ...fixNear(2) });
+    await until("group distances known", () => sam!.member(M)?.distanceFromGroupM === 0 && sam!.member(M)?.nearestMemberId);
+    expect(sam!.view!.members[0]!.isYou).toBe(true);
+    expect(sam!.view!.you).toBe(S);
+    // Privacy outside an alert: friends don't see medical info or the contact's full number.
+    expect(sam!.member(M)!.medical).toBe("");
+    expect(sam!.member(M)!.emergencyContact.phone).toBe("+•••••••••99");
+    expect(maya!.member(M)!.medical).toContain("penicillin");
 
-    // 1. Baseline: a clear answer to a check-in keeps everything green.
-    await call(`/api/s/${id}/demo/coherent`, userKey, { delayMs: 0, wait: true });
-    const ok = await until("coherent check-in scored", () => phone.view?.checkins.find((c) => c.outcome === "ok"));
-    expect(ok.result!.engine).toBe("mock");
-    expect(phone.view!.stage).toBe(0);
+    // Wrong-person checks.
+    expect((await call(`/api/groups/${code}/members/${M}/signals`, sam!.key, { heartbeat: true })).status).toBe(403);
+    expect((await call(`/api/groups/${code}/members/${M}/ack`, sam!.key, {})).status).toBe(409); // not in alert yet
 
-    // 2. Walk away from the group: risk goes to "watch" and Wingman proactively asks a check-in.
-    await call(`/api/s/${id}/demo/walk`, userKey, { durationMs: 300 });
-    const probe = await until("suspicion check-in", () => phone.view?.checkin?.status === "pending" && phone.view.checkin);
-    expect(probe.trigger).toBe("suspicion: away from group");
-    // On stage, automatic check-ins must not record the presenter's narration as the answer.
-    expect(probe.autoListen).toBe(false);
-    expect(phone.view!.risk.reasons.map((r) => r.code)).toContain("away_from_group");
-    expect(phone.view!.risk.level).toBe("watch");
+    // ② Maya drifts 350 m away from everyone.
+    await call(`/api/groups/${code}/demo/walk`, maya!.key, { target: M, durationMs: 300 });
+    await until("away from group", () => sam!.member(M)?.risk.reasons.some((r) => r.code === "away_from_group"));
+    expect(sam!.member(M)!.risk.summary).toMatch(/from your group/);
+    // ③ fall, ④ slurred answer to the pending check-in.
+    await call(`/api/groups/${code}/demo/fall`, maya!.key, { target: M });
+    await until("watch-level check-in", () => maya!.member(M)?.checkin?.status === "pending");
+    expect(maya!.of("checkin").length).toBeGreaterThan(0); // the server asked Maya's phone directly
+    expect(sam!.of("checkin").length).toBe(0);
+    await call(`/api/groups/${code}/demo/slurred`, maya!.key, { target: M, delayMs: 0, wait: true });
 
-    // 3. A fall, then a slurred answer: alert -> level 1, buddies see the reasons.
-    await call(`/api/s/${id}/demo/fall`, userKey, {});
-    await call(`/api/s/${id}/demo/slurred`, userKey, { delayMs: 0, wait: true });
-    await until("level 1", () => buddy.view?.stage === 1);
-    const codes = buddy.view!.risk.reasons.map((r) => r.code);
-    expect(codes).toEqual(expect.arrayContaining(["fall", "impaired_checkin", "away_from_group"]));
-    expect(buddy.view!.risk.level).toBe("alert");
-    expect(buddy.view!.risk.summary).toMatch(/^check-in answer sounded impaired: .+ \+ fall detected .+ \+ \d+ m from your group( \+ it.s \d AM)?$/);
-    expect(buddy.view!.user.medical).toBe("Allergic to penicillin"); // shared once an alert fires
-    expect(buddy.view!.fix).not.toBeNull();
+    // L1: every OTHER member gets an alert about Maya; Maya gets told her friends were alerted.
+    await until("Sam alerted", () => sam!.of("alert").some((a) => a.alert.memberId === M && a.alert.stage === 1 && !a.you));
+    await until("Leo alerted", () => leo!.of("alert").some((a) => a.alert.memberId === M && a.alert.stage === 1));
+    expect(maya!.of("alert").find((a) => a.alert.stage === 1)?.you).toBe(true);
+    const mv = sam!.member(M)!;
+    expect(mv.risk.summary).toMatch(/check-in answer sounded impaired.*fall detected.*from your group/);
+    expect(mv.medical).toContain("penicillin"); // revealed during the alert
+    expect(mv.lastCheckin?.result?.transcript).toContain("m'fine");
+    expect(sam!.member(S)!.alert).toBeNull(); // Sam's own ladder is untouched
 
-    // 4. Nobody responds: bystander mode on the phone, then the emergency contact.
-    await until("level 2 (bystander)", () => phone.view?.stage === 2, 4000);
-    await until("level 3 (contact notified)", () => phone.view?.stage === 3 && phone.view.notifications.length > 0, 4000);
-    const sms = phone.view!.notifications[0]!;
+    // L2 bystander on Maya's phone, then L3 SMS to Maya's contact.
+    await until("bystander", () => maya!.of("alert").some((a) => a.alert.stage === 2 && a.you && a.alert.bystander));
+    await until("L3 notified", () => leo!.view?.notifications.some((n) => n.aboutMemberId === M && n.channel === "sms"));
+    const sms = leo!.view!.notifications.find((n) => n.aboutMemberId === M)!;
     expect(sms.simulated).toBe(true);
-    expect(sms.to).toBe("+14165550199");
-    expect(sms.body).toContain("Yeyito may need help");
-    expect(sms.body).toContain("maps.google.com");
+    expect(sms.body).toContain("Maya may need help");
+    expect(sms.body).toContain("Sam, Leo");
 
-    // 5. Buddy: "I'm on my way" is visible to everyone.
-    await call(`/api/s/${id}/buddy/ack`, inviteKey, { buddyId: join.body.buddyId });
-    await until("ack visible on phone", () => phone.view?.acks.some((a) => a.name === "Sam"));
+    // ⑤ Sam: on my way. Everyone sees it.
+    expect((await call(`/api/groups/${code}/members/${M}/ack`, maya!.key, {})).status).toBe(400); // can't ack yourself
+    expect((await call(`/api/groups/${code}/members/${M}/ack`, sam!.key, {})).status).toBe(200);
+    await until("ack visible to Maya", () => maya!.of("ack").some((a) => a.ack.byName === "Sam" && a.you));
+    await until("ack in Leo's view", () => leo!.member(M)?.alert?.acks.some((a) => a.by === S));
 
-    // 6. A confused person can't dismiss it: wrong PIN is rejected; the right one resolves.
-    expect((await call(`/api/s/${id}/pin`, userKey, { pin: "0000" })).status).toBe(401);
-    expect(phone.view!.stage).toBe(3);
-    expect((await call(`/api/s/${id}/pin`, inviteKey, { pin: "1234" })).status).toBe(403); // buddies can't cancel
-    expect((await call(`/api/s/${id}/pin`, userKey, { pin: "1234" })).status).toBe(200);
-    await until("resolved on buddy screen", () => buddy.view?.stage === 0);
-    expect(buddy.stages).toEqual([0, 1, 2, 3, 0]);
-    expect(phone.view!.risk.level).toBe("ok");
-    expect(phone.view!.events.some((e) => e.text.includes(`Resolved by Yeyito (PIN "I'm OK")`))).toBe(true);
+    // Wrong PIN rejected, then Leo finds her: "found & OK".
+    const bad = await call(`/api/groups/${code}/members/${M}/resolve`, maya!.key, { pin: "9999" });
+    expect(bad.status).toBe(401);
+    expect(bad.body.attemptsLeft).toBe(2);
+    expect(maya!.member(M)!.alert).not.toBeNull();
+    expect((await call(`/api/groups/${code}/members/${M}/resolve`, leo!.key, { note: "with her at the bar" })).status).toBe(200);
+    await until("resolved everywhere", () => sam!.of("resolved").some((r) => r.memberId === M && r.by === "Leo") && maya!.member(M)?.alert === null);
 
-    // The log the buddies see tells the whole story, in order.
-    const log = buddy.view!.events.map((e) => e.text);
-    const order = ["walking away", "Possible fall", "sounded impaired", "LEVEL 1", "LEVEL 2", "LEVEL 3", "Sam is on the way", "Resolved by"];
-    const idx = order.map((needle) => log.findIndex((t) => t.includes(needle)));
-    expect(idx.every((i) => i >= 0)).toBe(true);
-    expect([...idx].sort((a, b) => a - b)).toEqual(idx);
+    expect(sam!.stages.get(M)).toEqual([0, 1, 2, 3, 0]);
+    expect(maya!.stages.get(M)).toEqual([0, 1, 2, 3, 0]);
+    expect(sam!.stages.get(S)).toEqual([0]);
 
-    // 7. Ending the night deletes everything and kicks the buddy out.
-    expect((await call(`/api/s/${id}/end`, userKey, {})).status).toBe(200);
-    await until("buddy told the session ended", () => buddy.ended);
-    expect((await call(`/api/s/${id}`, userKey)).status).toBe(404);
-    phone.ws.close();
-    buddy.ws.close();
+    // The log tells the story in order.
+    const texts = leo!.view!.events.map((e) => e.text);
+    const idx = (re: RegExp) => texts.findIndex((t) => re.test(t));
+    const order = [/walking away/, /fall detected/i, /sounded impaired/, /LEVEL 1 · Maya/, /LEVEL 2/, /LEVEL 3/, /Sam is on the way to Maya/, /Wrong PIN/, /resolved by Leo/];
+    const positions = order.map(idx);
+    expect(positions.every((p) => p >= 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+
+    // End night (any member): everyone is told, and the group is gone.
+    expect((await call(`/api/groups/${code}/end`, sam!.key, {})).status).toBe(200);
+    await until("ended on every phone", () => [maya, sam, leo].every((p) => p!.of("ended").length === 1));
+    expect((await call(`/api/groups/${code}`, "")).status).toBe(404);
+    expect(app.groups.has(code)).toBe(false);
+    for (const p of [maya, sam, leo]) p!.ws.close();
   }, 20_000);
 
-  test("missed check-in after a fall escalates; a coherent reply de-escalates", async () => {
-    const { id, userKey, inviteKey } = await newSession();
-    const phone = client(id, userKey);
-    await until("connected", () => phone.view);
-    await call(`/api/s/${id}/demo/fall`, userKey, {});
-    const c = await until("fall triggers a check-in", () => phone.view?.checkin);
-    expect(c.trigger).toBe("suspicion: fall");
-    await call(`/api/s/${id}/demo/miss`, userKey, { afterMs: 0 });
-    await until("level 1 after miss", () => phone.view?.stage === 1);
-    expect(phone.view!.risk.summary).toMatch(/^missed a check-in \+ fall detected/);
-    // Level 1 asks the person directly; a clear answer clears the alert.
-    await until("alert check-in", () => phone.view?.checkin?.trigger === "alert");
-    await call(`/api/s/${id}/demo/coherent`, userKey, { delayMs: 0, wait: true });
-    await until("back to monitoring", () => phone.view?.stage === 0);
-    expect(phone.view!.risk.level).toBe("ok");
-    expect((await call(`/api/s/${id}/demo/reset`, userKey, {})).status).toBe(200);
-    await call(`/api/s/${id}/end`, userKey, {});
-    phone.ws.close();
-    void inviteKey;
-  }, 15_000);
+  test("several members can be in alert at once; alerts are independent", async () => {
+    const { code, joins } = await newGroup(["Ana", "Ben", "Cy"]);
+    const [a, b, c] = joins;
+    const pc = phone(c!);
+    await until("connected", () => pc.view);
+    await call(`/api/groups/${code}/members/${a!.memberId}/escalate`, c!.key, {});
+    await call(`/api/groups/${code}/members/${b!.memberId}/escalate`, c!.key, {});
+    await call(`/api/groups/${code}/members/${b!.memberId}/escalate`, c!.key, {});
+    await until("two alerts", () => pc.view?.alerts.length === 2 && pc.view.alerts[0]!.stage === 2);
+    expect(pc.view!.alerts.map((x) => [x.memberName, x.stage])).toEqual([["Ben", 2], ["Ana", 1]]);
+    // Ana cancels her own with her PIN; Ben's stays.
+    expect((await call(`/api/groups/${code}/members/${a!.memberId}/resolve`, a!.key, { pin: "1234" })).status).toBe(200);
+    await until("one alert left", () => pc.view?.alerts.length === 1 && pc.view.alerts[0]!.memberName === "Ben");
+    await call(`/api/groups/${code}/end`, a!.key, {});
+    pc.ws.close();
+  });
+});
 
-  test("a real voice reply (WAV upload) goes through the scoring pipeline", async () => {
-    const { id, userKey } = await newSession();
-    const phone = client(id, userKey);
-    await until("connected", () => phone.view);
-    const asked = await call(`/api/s/${id}/checkin`, userKey, {});
-    expect(asked.body.checkin.autoListen).toBe(true); // "Check in now" listens right away
-    const wav = new Uint8Array(await Bun.file("public/demo-audio/coherent.wav").arrayBuffer());
-    const r = await call(`/api/s/${id}/checkin/${asked.body.checkin.id}/answer`, userKey, wav, { "content-type": "audio/wav" });
+describe("check-ins", () => {
+  test("iOS .m4a answers (base64 JSON and raw body), typed answers, and a friend's ping", async () => {
+    const { code, joins } = await newGroup(["Maya", "Sam"]);
+    const [m, s] = joins;
+    const m4a = new Uint8Array(await Bun.file("tests/fixtures/coherent.m4a").arrayBuffer());
+    const ask = async () => (await call(`/api/groups/${code}/members/${m!.memberId}/checkins`, m!.key, {})).body.checkin;
+
+    let c = await ask();
+    expect(c.autoListen).toBe(true); // "check in now" listens right away
+    let r = await call(`/api/groups/${code}/members/${m!.memberId}/checkins/${c.id}/answer`, m!.key, { audio: Buffer.from(m4a).toString("base64"), mime: "audio/m4a", durationMs: 4000 });
     expect(r.status).toBe(200);
     expect(r.body.checkin.outcome).toBe("ok");
     // Answering twice is rejected.
-    expect((await call(`/api/s/${id}/checkin/${asked.body.checkin.id}/answer`, userKey, { text: "again" })).status).toBe(409);
-    await call(`/api/s/${id}/end`, userKey, {});
-    phone.ws.close();
+    expect((await call(`/api/groups/${code}/members/${m!.memberId}/checkins/${c.id}/answer`, m!.key, { text: "again" })).status).toBe(409);
+
+    c = await ask();
+    r = await call(`/api/groups/${code}/members/${m!.memberId}/checkins/${c.id}/answer`, m!.key, m4a, { "content-type": "audio/x-m4a" });
+    expect(r.body.checkin.outcome).toBe("ok");
+
+    // Sam pings Maya; only Maya can answer.
+    const ping = await call(`/api/groups/${code}/members/${m!.memberId}/checkins`, s!.key, {});
+    expect(ping.body.checkin.trigger).toBe("requested by Sam");
+    expect((await call(`/api/groups/${code}/members/${m!.memberId}/checkins/${ping.body.checkin.id}/answer`, s!.key, { text: "hi" })).status).toBe(403);
+    r = await call(`/api/groups/${code}/members/${m!.memberId}/checkins/${ping.body.checkin.id}/answer`, m!.key, { text: "Uhh... dunno... where am i" });
+    expect(r.body.checkin.outcome).toBe("impaired");
+    // Sam sees the outcome and reason, but not the words, outside an alert.
+    const sv = (await call(`/api/groups/${code}/view`, s!.key)).body as GroupView;
+    const mm = sv.members.find((x) => x.id === m!.memberId)!;
+    expect(mm.lastCheckin?.outcome).toBe("impaired");
+    expect(mm.lastCheckin?.result?.reason).toBeTruthy();
+    expect(mm.lastCheckin?.result?.transcript).toBe("");
+    await call(`/api/groups/${code}/end`, m!.key, {});
+  });
+
+  test("iOS audio MIME types are normalised for Gemini", () => {
+    expect(["audio/m4a", "audio/x-m4a", "audio/mp4", "audio/MP4; codecs=mp4a.40.2"].map(geminiMime)).toEqual(["audio/mp4", "audio/mp4", "audio/mp4", "audio/mp4"]);
+    expect(geminiMime("audio/aac")).toBe("audio/aac");
+    expect(geminiMime("audio/x-wav")).toBe("audio/wav");
   });
 
   test("'real audio' demo answers stay safe offline: if no AI can hear the clip, the script decides", async () => {
-    const { id, userKey } = await newSession();
-    await call(`/api/s/${id}/settings`, userKey, { demoAnswerMode: "live" });
-    await call(`/api/s/${id}/demo/slurred`, userKey, { delayMs: 0, wait: true });
-    const v = (await call(`/api/s/${id}`, userKey)).body as SessionView;
-    const c = v.checkins.find((x) => x.result)!;
+    const { code, joins } = await newGroup(["Maya", "Sam"]);
+    const m = joins[0]!;
+    await call(`/api/groups/${code}/demo/mode`, m.key, { mode: "live" });
+    await call(`/api/groups/${code}/demo/slurred`, m.key, { target: m.memberId, delayMs: 0, wait: true });
+    const v = (await call(`/api/groups/${code}/view`, m.key)).body as GroupView;
+    const c = v.members[0]!.lastCheckin!;
     expect(c.result!.engine).toBe("mock");
     expect(c.outcome).toBe("impaired"); // not "ok", which would silently cancel the demo's alert
-    await call(`/api/s/${id}/end`, userKey, {});
-  });
-
-  test("privacy: with 'only on alert' sharing, buddies can't see location until an alert", async () => {
-    const { id, userKey, inviteKey } = await newSession({ shareLocation: "alert" });
-    await call(`/api/s/${id}/signal`, userKey, { hb: true, fix: { lat: 43.78446, lng: -79.18747, accuracy: 10 } });
-    const before = await call(`/api/s/${id}`, inviteKey);
-    expect(before.body.fix).toBeNull();
-    expect(before.body.user.contactPhone).toBe("+•••••••••99");
-    const join = await call(`/api/s/${id}/join`, inviteKey, { name: "Priya" });
-    await call(`/api/s/${id}/buddy/escalate`, inviteKey, { buddyId: join.body.buddyId });
-    const after = await call(`/api/s/${id}`, inviteKey);
-    expect(after.body.stage).toBe(1);
-    expect(after.body.fix).not.toBeNull();
-    // Keys are enforced.
-    expect((await call(`/api/s/${id}`, "wrong")).status).toBe(403);
-    expect((await call(`/api/s/${id}/demo/fall`, inviteKey, {})).status).toBe(403);
-    await call(`/api/s/${id}/end`, userKey, {});
+    await call(`/api/groups/${code}/end`, m.key, {});
   });
 
   const live = process.env.E2E_LIVE_AI === "1" && availableEngines()[0] !== "mock";
-  test.skipIf(!live)("live AI scores the canned slurred clip as impaired (one API call)", async () => {
-    const live = startServer({ port: 0, quiet: true });
+  test.skipIf(!live)("live Gemini scores a real iOS-style .m4a slurred clip as impaired (one API call)", async () => {
+    const srv = startServer({ port: 0, quiet: true });
     try {
-      const r = await fetch(`${live.url}/api/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Yeyito", pin: "1234", demo: true }) });
-      const { id, userKey } = (await r.json()) as any;
-      await fetch(`${live.url}/api/s/${id}/settings`, { method: "POST", headers: { "x-wingman-key": userKey, "content-type": "application/json" }, body: JSON.stringify({ demoAnswerMode: "live" }) });
-      await fetch(`${live.url}/api/s/${id}/demo/slurred`, { method: "POST", headers: { "x-wingman-key": userKey, "content-type": "application/json" }, body: JSON.stringify({ delayMs: 0, wait: true }) });
-      const v = (await (await fetch(`${live.url}/api/s/${id}`, { headers: { "x-wingman-key": userKey } })).json()) as SessionView;
-      const c = v.checkins.find((x) => x.result)!;
-      console.log(`[live AI] ${c.result?.engine} ${c.result?.model} ${c.result?.latencyMs} ms: ${c.result?.reason}`);
-      expect(c.result?.engine).not.toBe("mock");
-      expect(c.outcome).toBe("impaired");
+      const post = (p: string, key: string, b: unknown) => fetch(srv.url + p, { method: "POST", headers: { authorization: `Bearer ${key}`, "content-type": "application/json" }, body: JSON.stringify(b) }).then((r) => r.json() as any);
+      const j = await post("/api/groups", "", { member: setup("Maya") });
+      const c = (await post(`/api/groups/${j.code}/members/${j.memberId}/checkins`, j.key, {})).checkin;
+      const m4a = Buffer.from(await Bun.file("tests/fixtures/slurred.m4a").arrayBuffer()).toString("base64");
+      const r = await post(`/api/groups/${j.code}/members/${j.memberId}/checkins/${c.id}/answer`, j.key, { audio: m4a, mime: "audio/m4a" });
+      console.log(`[live AI] ${r.checkin.result.engine} ${r.checkin.result.model} ${r.checkin.result.latencyMs} ms: ${r.checkin.result.reason} | "${r.checkin.result.transcript}"`);
+      expect(r.checkin.result.engine).toBe("gemini");
+      expect(r.checkin.outcome).toBe("impaired");
     } finally {
-      live.stop();
+      srv.stop();
     }
-  }, 30_000);
+  }, 40_000);
 });
 
-test("demo pacing: a storyline check-in can't time out between clicker steps", () => {
-  // Step 2 (walk away) asks a check-in that step 4 answers ~35-45 s later while the presenter talks.
-  expect(DEMO_TIMERS.checkinTimeoutMs).toBeGreaterThanOrEqual(60_000);
+describe("demo groups and the stage view", () => {
+  test("simulated friends heartbeat, answer check-ins, and the storyline can target a real phone or a friend", async () => {
+    const d = await call("/api/demo", "", { presenterName: "Yeyito" });
+    expect(d.status).toBe(200);
+    const { code, stageKey } = d.body;
+    const stage = phone({ code, key: stageKey });
+    await until("stage hello", () => stage.view);
+    expect(stage.view!.you).toBeNull();
+    expect(stage.view!.members.map((m) => [m.name, m.simulated, m.presence])).toEqual([
+      ["Sam", true, "online"],
+      ["Maya", true, "online"],
+      ["Leo", true, "online"],
+    ]);
+    // The presenter's real phone joins like anyone else and becomes the default story subject.
+    const y = (await call(`/api/groups/${code}/join`, "", setup("Yeyito"))).body as JoinResponse;
+    const yp = phone(y);
+    await until("phone connected", () => yp.view && stage.view?.members.length === 4);
+    await call(`/api/groups/${code}/demo/timers`, stageKey, { timers: FAST });
+    yp.send({ t: "signals", heartbeat: true, appState: "foreground", fix: { lat: 43.78446, lng: -79.18747, accuracy: 15 } });
+    await call(`/api/groups/${code}/demo/reset`, stageKey, {}); // re-anchors the friends next to the phone
+
+    // A simulated friend answers a check-in by itself.
+    const maya = stage.view!.members.find((m) => m.name === "Maya")!;
+    await call(`/api/groups/${code}/members/${maya.id}/checkins`, y.key, {});
+    await until("Maya answered", () => stage.view?.members.find((m) => m.id === maya.id)?.lastCheckin?.outcome === "ok", 4000);
+
+    // Storyline steps on the real phone (default subject), "friend" steps done by Sam.
+    for (const s of STORY) {
+      if (s.action === "checkin") continue; // live step: the presenter answers on the phone
+      const r = await call(`/api/groups/${code}/demo/${s.action}`, stageKey, { delayMs: 0, wait: true, durationMs: 200 });
+      expect(r.status).toBe(200);
+      if (s.action === "slurred") await until("phone in alert", () => stage.view?.alerts[0]?.memberId === y.memberId);
+      if (s.action === "slurred") await until("L3", () => stage.view?.alerts[0]?.stage === 3, 6000);
+    }
+    await until("resolved", () => stage.view?.alerts.length === 0);
+    expect(stage.stages.get(y.memberId)).toEqual([0, 1, 2, 3, 0]);
+    expect(stage.view!.events.some((e) => /Sam is on the way to Yeyito/.test(e.text))).toBe(true);
+    expect(yp.of("alert").filter((a) => a.you).map((a) => a.alert.stage)).toEqual([1, 2, 3]);
+
+    // Now a simulated friend is the one in trouble: the real phone gets the alert.
+    await call(`/api/groups/${code}/demo/reset`, stageKey, {});
+    await call(`/api/groups/${code}/demo/subject`, stageKey, { target: maya.id });
+    await call(`/api/groups/${code}/demo/fall`, stageKey, {});
+    await call(`/api/groups/${code}/demo/slurred`, stageKey, { delayMs: 0, wait: true });
+    await until("phone alerted about Maya", () => yp.of("alert").some((a) => a.alert.memberId === maya.id && !a.you));
+    expect((await call(`/api/groups/${code}/members/${maya.id}/ack`, y.key, {})).status).toBe(200);
+    expect((await call(`/api/groups/${code}/members/${maya.id}/resolve`, y.key, {})).status).toBe(200);
+    await until("Maya OK", () => stage.view?.alerts.length === 0);
+
+    // The stage key can't act as a member, and members of other groups can't drive this one.
+    expect((await call(`/api/groups/${code}/members/${maya.id}/ack`, stageKey, {})).status).toBe(403);
+    await call(`/api/groups/${code}/end`, y.key, {});
+    stage.ws.close();
+    yp.ws.close();
+  }, 20_000);
+
+  test("demo controls are refused on a real (non-demo) group", async () => {
+    const { code, joins } = await newGroup(["Maya", "Sam"], { demo: false });
+    expect((await call(`/api/groups/${code}/demo/fall`, joins[0]!.key, {})).status).toBe(403);
+    await call(`/api/groups/${code}/end`, joins[0]!.key, {});
+  });
+
+  test("demo pacing: a storyline check-in can't time out between clicker steps", () => {
+    expect(DEMO_TIMERS.checkinTimeoutMs).toBeGreaterThanOrEqual(60_000);
+  });
 });
 
-describe("dead-man's switch", () => {
-  test("a phone that dies counts; a phone that was locked (backgrounded) does not", async () => {
-    const r = await call("/api/sessions", "", { name: "Yeyito", pin: "1234", demo: true });
-    const { id, userKey } = r.body;
-    await call(`/api/s/${id}/settings`, userKey, { timers: { heartbeatLostMs: 300 } });
-    await call(`/api/s/${id}/signal`, userKey, { hb: true });
+describe("joining, auth, privacy, lifecycle", () => {
+  test("validation, join links, preview, keys", async () => {
+    expect((await call("/api/groups", "", { member: { name: "X", pin: "1234" } })).status).toBe(400); // no consent
+    expect((await call("/api/groups", "", { member: { name: "X", pin: "12", consent: true } })).status).toBe(400);
+    const { code, joins } = await newGroup(["Maya"], { demo: false, over: { shareLocation: "alert" } });
+    const j = joins[0]!;
+    expect(j.code).toMatch(/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$/);
+    expect(j.links.deepLink).toBe(`wingman://join/${code}`);
+    expect(j.links.joinUrl).toEndWith(`/j/${code}`);
+    expect(parseJoinLink(j.links.joinUrl)).toBe(code);
+    expect(parseJoinLink(j.links.deepLink)).toBe(code);
+    expect(j.wsPath).toBe(`/ws?g=${code}&m=${j.memberId}&k=${j.key}`);
+    const page = await fetch(`${app.url}/j/${code}`);
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain(`wingman://join/${code}`);
+    expect((await fetch(`${app.url}/j/ZZZZZZ`)).status).toBe(404);
+    const preview = await call(`/api/groups/${code}`, "");
+    expect(preview.body.members).toEqual([{ name: "Maya", color: expect.any(String) }]);
+    expect(JSON.stringify(preview.body)).not.toContain("penicillin");
+
+    const sam = (await call(`/api/groups/${code}/join`, "", setup("Sam"))).body as JoinResponse;
+    expect(sam.key).not.toBe(j.key);
+    // Location only on alert.
+    await call(`/api/groups/${code}/members/${j.memberId}/signals`, j.key, fixNear(0));
+    let sv = (await call(`/api/groups/${code}/view`, sam.key)).body as GroupView;
+    expect(sv.members.find((m) => m.id === j.memberId)!.fix).toBeNull();
+    await call(`/api/groups/${code}/members/${j.memberId}/escalate`, sam.key, {});
+    sv = (await call(`/api/groups/${code}/view`, sam.key)).body as GroupView;
+    expect(sv.members.find((m) => m.id === j.memberId)!.fix).not.toBeNull();
+    // Keys are enforced.
+    expect((await call(`/api/groups/${code}/view`, "wrong")).status).toBe(403);
+    expect((await call(`/api/groups/${code}/view`, "")).status).toBe(403);
+    const bad = await fetch(`${app.url.replace("http", "ws")}/ws?g=${code}&m=${j.memberId}&k=nope`.replace("ws", "http"), { headers: { upgrade: "websocket" } });
+    expect(bad.status).toBe(403);
+    // Push token (no-op sender by default).
+    expect((await call(`/api/groups/${code}/members/${sam.memberId}/push-token`, sam.key, { kind: "expo", token: "ExponentPushToken[abc]" })).status).toBe(200);
+    sv = (await call(`/api/groups/${code}/view`, sam.key)).body as GroupView;
+    expect(sv.members[0]!.hasPushToken).toBe(true);
+    expect(sv.engines.push).toBe("none");
+    // Leaving deletes just that member.
+    expect((await call(`/api/groups/${code}/members/${sam.memberId}/leave`, sam.key, {})).status).toBe(200);
+    expect((await call(`/api/groups/${code}/view`, sam.key)).status).toBe(403);
+    const mv = (await call(`/api/groups/${code}/view`, j.key)).body as GroupView;
+    expect(mv.members.map((m) => m.name)).toEqual(["Maya"]);
+    await call(`/api/groups/${code}/end`, j.key, {});
+  });
+
+  test("dead-man's switch: a phone that dies counts; a phone that went to the background does not", async () => {
+    const { code, joins } = await newGroup(["Maya", "Sam"]);
+    const m = joins[0]!;
+    await call(`/api/groups/${code}/demo/timers`, m.key, { timers: { heartbeatLostMs: 300 } });
+    await call(`/api/groups/${code}/members/${m.memberId}/signals`, m.key, { heartbeat: true, appState: "foreground" });
     await Bun.sleep(450);
-    let v = (await call(`/api/s/${id}`, userKey)).body as SessionView;
-    expect(v.risk.reasons.map((x) => x.code)).toContain("offline");
-    // Screen locked: the page says so before going quiet (sendBeacon, text/plain body).
-    await call(`/api/s/${id}/signal`, userKey, { hb: true });
-    await fetch(`${app.url}/api/s/${id}/signal?k=${userKey}`, { method: "POST", headers: { "content-type": "text/plain" }, body: JSON.stringify({ hidden: true }) });
+    let v = (await call(`/api/groups/${code}/view`, joins[1]!.key)).body as GroupView;
+    let mm = v.members.find((x) => x.id === m.memberId)!;
+    expect(mm.risk.reasons.map((x) => x.code)).toContain("offline");
+    expect(mm.presence).toBe("silent");
+    await call(`/api/groups/${code}/members/${m.memberId}/signals`, m.key, { appState: "locked" });
     await Bun.sleep(450);
-    v = (await call(`/api/s/${id}`, userKey)).body as SessionView;
-    expect(v.signals.backgrounded).toBe(true);
-    expect(v.risk.reasons.map((x) => x.code)).not.toContain("offline");
-    await call(`/api/s/${id}/end`, userKey, {});
+    v = (await call(`/api/groups/${code}/view`, joins[1]!.key)).body as GroupView;
+    mm = v.members.find((x) => x.id === m.memberId)!;
+    expect(mm.presence).toBe("background");
+    expect(mm.signals.appState).toBe("locked");
+    expect(mm.risk.reasons.map((x) => x.code)).not.toContain("offline");
+    await call(`/api/groups/${code}/end`, m.key, {});
   });
 });

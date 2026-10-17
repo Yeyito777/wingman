@@ -105,7 +105,7 @@ async function gemini(req: ScoreRequest): Promise<Raw> {
   const key = process.env.GEMINI_API_KEY!;
   const models = geminiModels();
   const parts: any[] = [{ text: userText(req) }];
-  if (req.audio) parts.push({ inline_data: { mime_type: req.audio.mime, data: Buffer.from(req.audio.data).toString("base64") } });
+  if (req.audio) parts.push({ inline_data: { mime_type: geminiMime(req.audio.mime), data: Buffer.from(req.audio.data).toString("base64") } });
   const body = {
     system_instruction: { parts: [{ text: SYSTEM }] },
     contents: [{ role: "user", parts }],
@@ -132,6 +132,15 @@ async function gemini(req: ScoreRequest): Promise<Raw> {
   throw new Error(lastErr);
 }
 
+/** iOS records AAC in an MPEG-4 container (.m4a) and labels it a few different ways; Gemini wants audio/mp4. */
+export function geminiMime(mime: string): string {
+  const m = mime.toLowerCase().split(";")[0]!.trim();
+  if (m === "audio/m4a" || m === "audio/x-m4a" || m === "audio/mp4a-latm" || m === "audio/mp4" || m === "video/mp4") return "audio/mp4";
+  if (m === "audio/x-wav" || m === "audio/wave" || m === "audio/vnd.wave") return "audio/wav";
+  if (m === "audio/mp3") return "audio/mpeg";
+  return m || "audio/wav";
+}
+
 // ---------- OpenAI ----------
 
 async function openai(req: ScoreRequest): Promise<Raw> {
@@ -139,7 +148,8 @@ async function openai(req: ScoreRequest): Promise<Raw> {
   let text = req.text ?? "";
   if (req.audio) {
     const form = new FormData();
-    const ext = req.audio.mime.includes("wav") ? "wav" : req.audio.mime.includes("mp4") ? "mp4" : "webm";
+    const gm = geminiMime(req.audio.mime);
+    const ext = gm.includes("wav") ? "wav" : gm.includes("mp4") ? "m4a" : gm.includes("aac") ? "aac" : gm.includes("mpeg") ? "mp3" : gm.includes("ogg") ? "ogg" : "webm";
     form.append("file", new Blob([req.audio.data as BlobPart], { type: req.audio.mime }), `reply.${ext}`);
     form.append("model", process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe");
     const tr = await fetch("https://api.openai.com/v1/audio/transcriptions", {
@@ -176,7 +186,8 @@ async function openai(req: ScoreRequest): Promise<Raw> {
 export function mockScore(req: ScoreRequest): Raw {
   if (req.audio && !req.text) {
     // Can't hear audio without a model: trust that a non-trivial recording is an answer.
-    const responded = req.audio.data.byteLength > 24_000;
+    // ~0.75 s of 16 kHz PCM, or ~1.5 s of compressed (AAC/Opus) audio.
+    const responded = req.audio.data.byteLength > (geminiMime(req.audio.mime) === "audio/wav" ? 24_000 : 6_000);
     return {
       model: "heuristic",
       transcript: responded ? "(voice reply received; add GEMINI_API_KEY to analyse speech)" : "",

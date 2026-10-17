@@ -1,7 +1,10 @@
 // Level-3 notifier: Twilio SMS (+ optional voice call) when TWILIO_* is configured, otherwise a clearly
 // simulated notifier that records exactly what would have been sent.
 
-import type { Notification } from "../shared/types.ts";
+import type { Notification as WireNotification } from "../shared/types.ts";
+
+/** what a notifier reports; the group adds which member it was about */
+export type Notification = Omit<WireNotification, "aboutMemberId">;
 
 export interface Alert {
   to: string;

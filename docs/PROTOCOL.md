@@ -1,4 +1,4 @@
-# Wingman protocol (v1)
+# Wingman protocol (v2)
 
 The contract between the Wingman server and its clients: the native iPhone app (`mobile/`), the projector stage view
 and the minimal web fallback. Types live in [`shared/protocol.ts`](../shared/protocol.ts) (plain TS, no runtime
@@ -170,6 +170,7 @@ heartbeating for `heartbeatLostMs` they become `silent`, which feeds the dead-ma
 
 `GroupView.members[]` has one `MemberView` per member (you first). For **other** members, outside their alert:
 
+- `phone` (their own number) is always visible to the group, so friends can call each other;
 - `fix` / distances are `null` if they chose `shareLocation: "alert"`;
 - `medical` is `""` and `emergencyContact.phone` is masked;
 - `lastCheckin.result.transcript` is `""` (outcome + reason are visible).
@@ -208,4 +209,6 @@ either the real phone or a simulated friend. The stage view is `/stage/:code?k=<
 
 ## CHANGELOG
 
+- **v2** (Oct 17 2026): `MemberView.phone` (the member's own number from `MemberSetup.phone`, `""` if not given),
+  visible to every member of the group so the alert takeover can offer "Call Maya". Additive; v1 clients keep working.
 - **v1** (Oct 17 2026): first group protocol (symmetric members, join codes, per-member keys, WS hello/view/alert).
