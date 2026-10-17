@@ -3,7 +3,7 @@
 
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import type { ClientMsg, JoinResponse, MemberSetup, ServerMsg, SignalBatch } from "@shared/protocol";
 import { ApiError, WingmanClient } from "../api/client";
 import { mockDeps } from "../api/mock";
@@ -76,7 +76,12 @@ function onMessage(msg: ServerMsg) {
   const before = getState();
   dispatch({ type: "server", msg, at: Date.now() });
   const after = getState();
-  if (msg.t === "alert" && !msg.you) alarm.friendAlert(msg.title, msg.body);
+  // On screen, the takeover owns the alarm. In the background (dev build), a notification is all we can do.
+  if (AppState.currentState !== "active") {
+    if (msg.t === "alert" && !msg.you) alarm.notify(msg.title, msg.body);
+    if (msg.t === "alert" && msg.you && msg.alert.stage >= 2) alarm.notify("Wingman: are you OK?", "Your friends were alerted. Open Wingman.");
+    if (msg.t === "checkin") alarm.notify("Wingman check-in", msg.checkin.prompt);
+  }
   if (msg.t === "ended" || msg.t === "left" || (before.membership && !after.membership)) {
     disconnect();
     alarm.stopAll();

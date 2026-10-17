@@ -49,7 +49,7 @@ export default function Group() {
           <T v="caption" color={colors.text3} style={{ textTransform: "uppercase", letterSpacing: 1 }}>
             {others.length ? `${members.length} of you tonight` : "Tonight"}
           </T>
-          <T v="title" numberOfLines={1}>
+          <T v={(view?.name.length ?? 0) > 16 ? "title2" : "title"} numberOfLines={1}>
             {view?.name ?? "Your night out"}
           </T>
         </View>

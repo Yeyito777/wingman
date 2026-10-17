@@ -4,10 +4,10 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, TextInput, View } from "react-native";
 import { JOIN_CODE_LENGTH, isJoinCode, normalizeJoinCode } from "@shared/protocol";
-import { Button, IconButton, Screen, T } from "../components/ui";
-import { client, joinNight } from "../services/session";
-import { colors, font } from "../theme";
-import { showError } from "../lib/errors";
+import { Button, IconButton, Screen, T } from "../../components/ui";
+import { client, joinNight } from "../../services/session";
+import { colors, font } from "../../theme";
+import { showError } from "../../lib/errors";
 
 export default function Join() {
   const params = useLocalSearchParams<{ code?: string }>();

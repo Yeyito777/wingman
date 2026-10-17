@@ -87,9 +87,12 @@ npx tsc --noEmit                                         # types
 bun test                                                 # reducer, fall detector, API client (no network)
 WINGMAN_URL=http://localhost:3100 bun test tests/live.test.ts   # the API client against a real group server
 npx expo export --platform web --output-dir dist && bun tools/screenshots.ts   # every screen at iPhone 13 size
+WINGMAN_URL=http://localhost:3100 bun tools/e2e-real.ts  # the real UI against a real server (after the export)
 npx expo-doctor
 ```
 
 `tools/screenshots.ts` drives the web build in headless Chromium (390×844 @3x) against the mock server, fails on JS
-errors or horizontal overflow, and writes `docs/screenshots/*.png`. `tools/make-sounds.ts` regenerates the siren,
+errors or horizontal overflow, and writes `docs/screenshots/*.png`. `tools/e2e-real.ts` serves the same build same-origin with `/api` and `/ws` proxied to a real server (it has no CORS) and
+taps through join → a friend's alert → *I'm on my way* → own bystander mode → wrong PIN → right PIN → check-in → end,
+writing `docs/screenshots/real/`. `tools/make-sounds.ts` regenerates the siren,
 alarm and chime WAVs, and `tools/render-icon.ts` renders `assets/brand/icon.svg` into the app icon and splash.

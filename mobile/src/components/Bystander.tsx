@@ -3,7 +3,7 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import type { AlertState } from "@shared/protocol";
-import { useKeepAwake } from "expo-keep-awake";
+import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Linking, Platform, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -19,7 +19,12 @@ import { Button, T } from "./ui";
 const PIN_LEN = 4;
 
 export function Bystander({ alert }: { alert: AlertState }) {
-  useKeepAwake("bystander");
+  useEffect(() => {
+    activateKeepAwakeAsync("bystander").catch(() => {});
+    return () => {
+      deactivateKeepAwake("bystander").catch(() => {});
+    };
+  }, []);
   const self = useApp(me);
   const flash = useRef(new Animated.Value(0)).current;
   const [pinMode, setPinMode] = useState(false);

@@ -2,7 +2,7 @@ import { DarkTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { View } from "react-native";
+import { AppState, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Overlays } from "../components/Overlays";
 import { installDevHook } from "../lib/devhook";
@@ -36,6 +36,9 @@ export default function RootLayout() {
     session.connect();
     sensors.start();
     session.registerPush();
+    // Coming back to the app: reconnect at once instead of waiting out the backoff.
+    const sub = AppState.addEventListener("change", (st) => st === "active" && session.reconnectNow());
+    return () => sub.remove();
   }, [membership]);
 
   return (

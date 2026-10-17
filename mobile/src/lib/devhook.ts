@@ -16,6 +16,7 @@ export function installDevHook() {
     router,
     dispatch,
     getState,
+    savePin,
     async mockNight(name = "Yeyito") {
       await savePin("1234");
       dispatch({ type: "serverUrl", url: "mock" });
