@@ -7,13 +7,14 @@ import { RecordingPresets, useAudioRecorder } from "expo-audio";
 import { File } from "expo-file-system";
 import * as Speech from "expo-speech";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from "react-native";
+import { Animated, Easing, Platform, Pressable, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { audioMode, chimeAndWait, play, tap } from "../services/alarm";
 import { speakFully } from "../services/voice";
 import { answerCheckin } from "../services/session";
 import { dispatch } from "../state/store";
 import { colors, font } from "../theme";
+import { KeyboardScreen } from "./KeyboardScreen";
 import { Button, LinkButton, T } from "./ui";
 
 const MAX_MS = 8000;
@@ -152,63 +153,66 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
   return (
     <View style={{ position: "absolute", inset: 0, backgroundColor: colors.bg }}>
       <SafeAreaView style={{ flex: 1 }}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <View style={{ paddingHorizontal: 28, paddingTop: 28 }}>
-            <T v="caption" color={colors.text3} style={{ textTransform: "uppercase", letterSpacing: 1.2 }}>
-              Wingman check-in
-            </T>
-            <T v="title" style={{ marginTop: 12, fontSize: 28, lineHeight: 35 }}>
-              {checkin.prompt.replace(/^Hey, it's Wingman\. /, "")}
-            </T>
-          </View>
-
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            {phase === "ok" ? (
-              <Result icon="checkmark" color={colors.green} title="You sound good" sub="Have a great night." />
-            ) : phase === "notok" ? (
-              <Result icon="ellipsis-horizontal" color={colors.yellow} title="Thanks" sub={note} />
-            ) : phase === "error" ? (
-              <Result icon="cloud-offline-outline" color={colors.text2} title="Couldn't send that" sub={note} />
-            ) : phase === "typing" ? (
-              <View style={{ width: "100%", paddingHorizontal: 28 }}>
-                <View style={{ backgroundColor: colors.surface, borderRadius: 18, padding: 16 }}>
-                  <TextInput
-                    autoFocus
-                    value={typed}
-                    onChangeText={setTyped}
-                    placeholder="Where are you, and who are you with?"
-                    placeholderTextColor={colors.text3}
-                    multiline
-                    style={{ color: colors.text, fontSize: 20, fontFamily: font, minHeight: 90 }}
-                  />
-                </View>
+        <KeyboardScreen
+          header={(up) => (
+            <View style={{ paddingHorizontal: 28, paddingTop: up ? 12 : 28 }}>
+              <T v="caption" color={colors.text3} style={{ textTransform: "uppercase", letterSpacing: 1.2 }}>
+                Wingman check-in
+              </T>
+              <T v="title" style={up ? { marginTop: 6, fontSize: 20, lineHeight: 26 } : { marginTop: 12, fontSize: 28, lineHeight: 35 }}>
+                {checkin.prompt.replace(/^Hey, it's Wingman\. /, "")}
+              </T>
+            </View>
+          )}
+          contentContainerStyle={{ flexGrow: 1, alignItems: "center", justifyContent: "center", paddingVertical: 12 }}
+          footerStyle={(up) => (up ? undefined : { minHeight: 130, justifyContent: "flex-end" })}
+          footer={
+            <>
+              {phase === "typing" ? (
+                <>
+                  <Button title="Send" disabled={!typed.trim()} onPress={() => submit({ text: typed.trim() })} />
+                  <LinkButton title="Speak instead" onPress={() => listen()} />
+                </>
+              ) : phase === "error" ? (
+                <>
+                  <Button title="Try again" onPress={() => setPhase("ready")} />
+                  <LinkButton title="Close" onPress={close} />
+                </>
+              ) : phase === "ok" || phase === "notok" ? null : (
+                <>
+                  <T v="callout" color={colors.text2} center>
+                    {phase === "asking" ? "Listen…" : phase === "ready" ? "Tap the mic and answer out loud" : phase === "listening" ? "Listening — tap when you're done" : "Checking your answer…"}
+                  </T>
+                  {phase !== "thinking" && <LinkButton title="Type instead" onPress={typeInstead} />}
+                </>
+              )}
+            </>
+          }
+        >
+          {phase === "ok" ? (
+            <Result icon="checkmark" color={colors.green} title="You sound good" sub="Have a great night." />
+          ) : phase === "notok" ? (
+            <Result icon="ellipsis-horizontal" color={colors.yellow} title="Thanks" sub={note} />
+          ) : phase === "error" ? (
+            <Result icon="cloud-offline-outline" color={colors.text2} title="Couldn't send that" sub={note} />
+          ) : phase === "typing" ? (
+            <View style={{ width: "100%", paddingHorizontal: 28 }}>
+              <View style={{ backgroundColor: colors.surface, borderRadius: 18, padding: 16 }}>
+                <TextInput
+                  autoFocus
+                  value={typed}
+                  onChangeText={setTyped}
+                  placeholder="Where are you, and who are you with?"
+                  placeholderTextColor={colors.text3}
+                  multiline
+                  style={{ color: colors.text, fontSize: 20, fontFamily: font, minHeight: 90 }}
+                />
               </View>
-            ) : (
-              <MicRing phase={phase} level={level} onPress={() => (phase === "listening" ? finishRecording(0) : phase !== "thinking" ? listen() : undefined)} />
-            )}
-          </View>
-
-          <View style={{ padding: 24, gap: 6, minHeight: 130, justifyContent: "flex-end" }}>
-            {phase === "typing" ? (
-              <>
-                <Button title="Send" disabled={!typed.trim()} onPress={() => submit({ text: typed.trim() })} />
-                <LinkButton title="Speak instead" onPress={() => listen()} />
-              </>
-            ) : phase === "error" ? (
-              <>
-                <Button title="Try again" onPress={() => setPhase("ready")} />
-                <LinkButton title="Close" onPress={close} />
-              </>
-            ) : phase === "ok" || phase === "notok" ? null : (
-              <>
-                <T v="callout" color={colors.text2} center>
-                  {phase === "asking" ? "Listen…" : phase === "ready" ? "Tap the mic and answer out loud" : phase === "listening" ? "Listening — tap when you're done" : "Checking your answer…"}
-                </T>
-                {phase !== "thinking" && <LinkButton title="Type instead" onPress={typeInstead} />}
-              </>
-            )}
-          </View>
-        </KeyboardAvoidingView>
+            </View>
+          ) : (
+            <MicRing phase={phase} level={level} onPress={() => (phase === "listening" ? finishRecording(0) : phase !== "thinking" ? listen() : undefined)} />
+          )}
+        </KeyboardScreen>
       </SafeAreaView>
     </View>
   );

@@ -2,7 +2,8 @@
 
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, TextInput, View } from "react-native";
+import { Pressable, TextInput, View } from "react-native";
+import { KeyboardScreen } from "../../components/KeyboardScreen";
 import { JOIN_CODE_LENGTH, isJoinCode, normalizeJoinCode } from "@shared/protocol";
 import { Button, IconButton, Screen, T } from "../../components/ui";
 import { client, joinNight } from "../../services/session";
@@ -53,56 +54,60 @@ export default function Join() {
 
   return (
     <Screen>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={{ flexDirection: "row", alignItems: "center", height: 52, paddingHorizontal: 16 }}>
-          <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
-        </View>
-        <View style={{ flex: 1, paddingHorizontal: 28, paddingTop: 24 }}>
-          <T v="title">Join a night out</T>
-          <T v="body" color={colors.text2} style={{ marginTop: 10 }}>
-            Enter the code on your friend's screen.
-          </T>
-          <Pressable onPress={() => input.current?.focus()} style={{ flexDirection: "row", gap: 8, marginTop: 36, justifyContent: "center" }}>
-            {Array.from({ length: JOIN_CODE_LENGTH }, (_, i) => (
-              <View
-                key={i}
-                style={{
-                  width: 48,
-                  height: 62,
-                  borderRadius: 14,
-                  backgroundColor: colors.surface,
-                  borderWidth: 2,
-                  borderColor: i === code.length ? colors.text2 : "transparent",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <T v="title" style={{ fontFamily: font }}>
-                  {code[i] ?? ""}
-                </T>
-              </View>
-            ))}
-          </Pressable>
-          <TextInput
-            ref={input}
-            testID="code-input"
-            value={code}
-            onChangeText={(t) => setCode(normalizeJoinCode(t))}
-            autoFocus
-            autoCapitalize="characters"
-            autoCorrect={false}
-            maxLength={JOIN_CODE_LENGTH + 2}
-            style={{ position: "absolute", opacity: 0, height: 1, width: 1 }}
-          />
-          <T v="callout" color={colors.text2} center style={{ marginTop: 20, minHeight: 20 }}>
-            {preview ?? ""}
-          </T>
-        </View>
-        <View style={{ padding: 24, gap: 12 }}>
-          <Button title="Join" size="xl" testID="join-submit" busy={busy} disabled={!isJoinCode(code)} onPress={join} />
-          <Button title="Scan QR code" kind="secondary" icon="scan-outline" onPress={() => router.push("/scan")} />
-        </View>
-      </KeyboardAvoidingView>
+      <KeyboardScreen
+        header={
+          <View style={{ flexDirection: "row", alignItems: "center", height: 52, paddingHorizontal: 16 }}>
+            <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
+          </View>
+        }
+        contentContainerStyle={{ paddingHorizontal: 28, paddingTop: 24, paddingBottom: 12 }}
+        footer={(up) => (
+          <>
+            <Button title="Join" size={up ? "l" : "xl"} testID="join-submit" busy={busy} disabled={!isJoinCode(code)} onPress={join} />
+            <Button title="Scan QR code" kind={up ? "ghost" : "secondary"} size={up ? "m" : "l"} icon="scan-outline" onPress={() => router.push("/scan")} />
+          </>
+        )}
+      >
+        <T v="title">Join a night out</T>
+        <T v="body" color={colors.text2} style={{ marginTop: 10 }}>
+          Enter the code on your friend's screen.
+        </T>
+        <Pressable testID="code-boxes" onPress={() => input.current?.focus()} style={{ flexDirection: "row", gap: 8, marginTop: 36, justifyContent: "center" }}>
+          {Array.from({ length: JOIN_CODE_LENGTH }, (_, i) => (
+            <View
+              key={i}
+              style={{
+                width: 48,
+                height: 62,
+                borderRadius: 14,
+                backgroundColor: colors.surface,
+                borderWidth: 2,
+                borderColor: i === code.length ? colors.text2 : "transparent",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <T v="title" style={{ fontFamily: font }}>
+                {code[i] ?? ""}
+              </T>
+            </View>
+          ))}
+        </Pressable>
+        <TextInput
+          ref={input}
+          testID="code-input"
+          value={code}
+          onChangeText={(t) => setCode(normalizeJoinCode(t))}
+          autoFocus
+          autoCapitalize="characters"
+          autoCorrect={false}
+          maxLength={JOIN_CODE_LENGTH + 2}
+          style={{ position: "absolute", opacity: 0, height: 1, width: 1 }}
+        />
+        <T v="callout" color={colors.text2} center style={{ marginTop: 20, minHeight: 20 }}>
+          {preview ?? ""}
+        </T>
+      </KeyboardScreen>
     </Screen>
   );
 }

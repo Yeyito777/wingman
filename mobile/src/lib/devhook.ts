@@ -3,6 +3,7 @@
 import { router } from "expo-router";
 import { Platform } from "react-native";
 import { setMockScene, type MockScene } from "../api/mock";
+import { simulateKeyboard } from "../components/KeyboardScreen";
 import { startNight } from "../services/session";
 import { dispatch, getState, savePin } from "../state/store";
 
@@ -29,6 +30,10 @@ export function installDevHook() {
     },
     scene(s: MockScene) {
       setMockScene(s);
+    },
+    /** pretend an iOS keyboard `height` pt tall is showing (null: hidden); see components/KeyboardScreen */
+    keyboard(height: number | null) {
+      simulateKeyboard(height === null ? null : window.innerHeight - height);
     },
   };
 }

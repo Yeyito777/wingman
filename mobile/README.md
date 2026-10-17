@@ -87,6 +87,7 @@ npx tsc --noEmit                                         # types
 bun test                                                 # reducer, fall detector, API client (no network)
 WINGMAN_URL=http://localhost:3100 bun test tests/live.test.ts   # the API client against a real group server
 npx expo export --platform web --output-dir dist && bun tools/screenshots.ts   # every screen at iPhone 13 size
+bun tools/keyboard.ts                                    # every text field + primary button stays above an iPhone 13 keyboard (after the export)
 WINGMAN_URL=http://localhost:3100 bun tools/e2e-real.ts  # the real UI against a real server (after the export)
 npx expo-doctor
 ```

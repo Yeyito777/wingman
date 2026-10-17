@@ -3,7 +3,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
+import { Linking, Pressable, TextInput, View } from "react-native";
+import { KeyboardScreen } from "../components/KeyboardScreen";
 import { IconButton, Screen, T } from "../components/ui";
 import { normalizeBaseUrl } from "../api/client";
 import { PERMISSIONS, request, status, type PermKey, type PermStatus } from "../services/permissions";
@@ -76,93 +77,95 @@ export default function Settings() {
 
   return (
     <Screen>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, height: 56 }}>
-          <T v="title2" style={{ flex: 1, paddingLeft: 4 }}>
-            Settings
-          </T>
-          <IconButton
-            icon="close"
-            label="Done"
-            onPress={() => {
-              save();
-              router.back();
-            }}
-          />
-        </View>
-        <ScrollView contentContainerStyle={{ padding: 20, gap: 26, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
-          <Section title="You">
-            {field("Name", "name")}
-            {field("Phone", "phone", { placeholder: "Optional", phone: true })}
-          </Section>
-          <Section title="Medical info" footer="Shown to your group and to bystanders only if you may need help.">
-            <View style={{ paddingHorizontal: 16, paddingVertical: 10 }}>
-              <TextInput
-                value={p.medical}
-                onChangeText={(t) => setP({ ...p, medical: t })}
-                onBlur={save}
-                multiline
-                placeholder="Allergies, medication, conditions"
-                placeholderTextColor={colors.text3}
-                style={{ color: colors.text, fontSize: 17, fontFamily: font, minHeight: 60, textAlignVertical: "top" }}
-              />
-            </View>
-          </Section>
-          <Section title="Emergency contact" footer="Texted only if nobody in your group responds.">
-            {field("Name", "contactName", { placeholder: "e.g. Mom" })}
-            {field("Phone", "contactPhone", { placeholder: "+1 …", phone: true })}
-          </Section>
-          <Section title="Security">
-            <Pressable onPress={() => router.push("/onboarding")} style={{ paddingHorizontal: 16, height: 50, flexDirection: "row", alignItems: "center" }}>
-              <T v="body" style={{ flex: 1 }}>
-                Change PIN & profile
+      <KeyboardScreen
+        header={
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, height: 56 }}>
+            <T v="title2" style={{ flex: 1, paddingLeft: 4 }}>
+              Settings
+            </T>
+            <IconButton
+              icon="close"
+              label="Done"
+              onPress={() => {
+                save();
+                router.back();
+              }}
+            />
+          </View>
+        }
+        contentContainerStyle={{ padding: 20, gap: 26, paddingBottom: 60 }}
+      >
+        <Section title="You">
+          {field("Name", "name")}
+          {field("Phone", "phone", { placeholder: "Optional", phone: true })}
+        </Section>
+        <Section title="Medical info" footer="Shown to your group and to bystanders only if you may need help.">
+          <View style={{ paddingHorizontal: 16, paddingVertical: 10 }}>
+            <TextInput
+              value={p.medical}
+              onChangeText={(t) => setP({ ...p, medical: t })}
+              onBlur={save}
+              multiline
+              placeholder="Allergies, medication, conditions"
+              placeholderTextColor={colors.text3}
+              style={{ color: colors.text, fontSize: 17, fontFamily: font, minHeight: 60, textAlignVertical: "top" }}
+            />
+          </View>
+        </Section>
+        <Section title="Emergency contact" footer="Texted only if nobody in your group responds.">
+          {field("Name", "contactName", { placeholder: "e.g. Mom" })}
+          {field("Phone", "contactPhone", { placeholder: "+1 …", phone: true })}
+        </Section>
+        <Section title="Security">
+          <Pressable onPress={() => router.push("/onboarding")} style={{ paddingHorizontal: 16, height: 50, flexDirection: "row", alignItems: "center" }}>
+            <T v="body" style={{ flex: 1 }}>
+              Change PIN & profile
+            </T>
+            <Ionicons name="chevron-forward" size={18} color={colors.text3} />
+          </Pressable>
+        </Section>
+        <Section title="Permissions" footer={isExpoGo ? "Expo Go can't keep location running with the screen locked. The installed Wingman app can." : undefined}>
+          {PERMISSIONS.map((x, i) => (
+            <PermRow
+              key={x.key}
+              first={i === 0}
+              title={x.title}
+              st={perms[x.key]}
+              onPress={async () => {
+                const st = perms[x.key];
+                if (st === "denied") Linking.openSettings().catch(() => {});
+                else if (st === "undetermined") await request(x.key as PermKey);
+                loadPerms();
+              }}
+            />
+          ))}
+        </Section>
+        <Section title="Server" footer={serverState === "ok" ? "Connected." : serverState === "bad" ? "Can't reach that server." : serverState === "checking" ? "Checking…" : "Where your group's night is coordinated."}>
+          <View style={{ paddingHorizontal: 16, paddingVertical: 6, flexDirection: "row", alignItems: "center" }}>
+            <TextInput
+              value={server}
+              onChangeText={setServer}
+              onBlur={() => checkServer(server)}
+              onSubmitEditing={() => checkServer(server)}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              placeholder="https://…"
+              placeholderTextColor={colors.text3}
+              style={{ color: colors.text, fontSize: 15, fontFamily: font, paddingVertical: 8, flex: 1 }}
+            />
+            {serverState === "ok" && <Ionicons name="checkmark-circle" size={20} color={colors.green} />}
+            {serverState === "bad" && <Ionicons name="alert-circle" size={20} color={colors.red} />}
+          </View>
+          {defaultServerUrl() && server !== defaultServerUrl() && (
+            <Pressable onPress={() => checkServer(defaultServerUrl())} style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+              <T v="callout" color={colors.accent}>
+                Use default
               </T>
-              <Ionicons name="chevron-forward" size={18} color={colors.text3} />
             </Pressable>
-          </Section>
-          <Section title="Permissions" footer={isExpoGo ? "Expo Go can't keep location running with the screen locked. The installed Wingman app can." : undefined}>
-            {PERMISSIONS.map((x, i) => (
-              <PermRow
-                key={x.key}
-                first={i === 0}
-                title={x.title}
-                st={perms[x.key]}
-                onPress={async () => {
-                  const st = perms[x.key];
-                  if (st === "denied") Linking.openSettings().catch(() => {});
-                  else if (st === "undetermined") await request(x.key as PermKey);
-                  loadPerms();
-                }}
-              />
-            ))}
-          </Section>
-          <Section title="Server" footer={serverState === "ok" ? "Connected." : serverState === "bad" ? "Can't reach that server." : serverState === "checking" ? "Checking…" : "Where your group's night is coordinated."}>
-            <View style={{ paddingHorizontal: 16, paddingVertical: 6, flexDirection: "row", alignItems: "center" }}>
-              <TextInput
-                value={server}
-                onChangeText={setServer}
-                onBlur={() => checkServer(server)}
-                onSubmitEditing={() => checkServer(server)}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                placeholder="https://…"
-                placeholderTextColor={colors.text3}
-                style={{ color: colors.text, fontSize: 15, fontFamily: font, paddingVertical: 8, flex: 1 }}
-              />
-              {serverState === "ok" && <Ionicons name="checkmark-circle" size={20} color={colors.green} />}
-              {serverState === "bad" && <Ionicons name="alert-circle" size={20} color={colors.red} />}
-            </View>
-            {defaultServerUrl() && server !== defaultServerUrl() && (
-              <Pressable onPress={() => checkServer(defaultServerUrl())} style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
-                <T v="callout" color={colors.accent}>
-                  Use default
-                </T>
-              </Pressable>
-            )}
-          </Section>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          )}
+        </Section>
+      </KeyboardScreen>
     </Screen>
   );
 }

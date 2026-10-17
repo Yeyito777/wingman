@@ -3,7 +3,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View } from "react-native";
+import { Platform, TextInput, View } from "react-native";
+import { KeyboardScreen } from "../components/KeyboardScreen";
 import { Logo } from "../components/Logo";
 import { PinDots, PinPad } from "../components/PinPad";
 import { Button, Field, IconButton, LinkButton, s, Screen, T } from "../components/ui";
@@ -180,96 +181,98 @@ export default function Onboarding() {
 
   return (
     <Screen>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        {header}
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 28, paddingTop: 24, gap: 12 }} keyboardShouldPersistTaps="handled">
-          <T v="title">{textStep.title}</T>
-          <T v="body" color={colors.text2} style={{ marginBottom: 16 }}>
-            {textStep.sub}
-          </T>
-          {step === "name" && (
-            <>
-              <Field>
-                <TextInput
-                  testID="name-input"
-                  style={s.input}
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="Your first name"
-                  placeholderTextColor={colors.text3}
-                  autoFocus
-                  autoCapitalize="words"
-                  maxLength={30}
-                  returnKeyType="next"
-                  onSubmitEditing={() => name.trim() && next()}
-                />
-              </Field>
-              <Field>
-                <TextInput
-                  style={s.input}
-                  value={phone}
-                  onChangeText={setPhone}
-                  placeholder="Your number (optional)"
-                  placeholderTextColor={colors.text3}
-                  keyboardType="phone-pad"
-                  textContentType="telephoneNumber"
-                />
-              </Field>
-            </>
-          )}
-          {step === "medical" && (
-            <Field>
-              <TextInput
-                style={[s.input, { minHeight: 120, textAlignVertical: "top" }]}
-                value={medical}
-                onChangeText={setMedical}
-                placeholder="e.g. Allergic to penicillin. Asthma, inhaler in my bag."
-                placeholderTextColor={colors.text3}
-                multiline
-                maxLength={600}
-              />
-            </Field>
-          )}
-          {step === "contact" && (
-            <>
-              <Field>
-                <TextInput style={s.input} value={contactName} onChangeText={setContactName} placeholder="Name (e.g. Mom)" placeholderTextColor={colors.text3} autoCapitalize="words" />
-              </Field>
-              <Field>
-                <TextInput
-                  style={s.input}
-                  value={contactPhone}
-                  onChangeText={setContactPhone}
-                  placeholder="Phone number"
-                  placeholderTextColor={colors.text3}
-                  keyboardType="phone-pad"
-                  textContentType="telephoneNumber"
-                />
-              </Field>
-            </>
-          )}
-        </ScrollView>
-        <View style={{ padding: 24, gap: 4 }}>
-          <Button
-            title="Continue"
-            testID="continue"
-            disabled={!textStep.ok}
-            onPress={() => {
-              saveProfile();
-              next();
-            }}
-          />
-          {textStep.skip && (
-            <LinkButton
-              title="Skip"
+      <KeyboardScreen
+        header={header}
+        contentContainerStyle={{ paddingHorizontal: 28, paddingTop: 24, paddingBottom: 12, gap: 12 }}
+        footer={
+          <>
+            <Button
+              title="Continue"
+              testID="continue"
+              disabled={!textStep.ok}
               onPress={() => {
                 saveProfile();
                 next();
               }}
             />
-          )}
-        </View>
-      </KeyboardAvoidingView>
+            {textStep.skip && (
+              <LinkButton
+                title="Skip"
+                onPress={() => {
+                  saveProfile();
+                  next();
+                }}
+              />
+            )}
+          </>
+        }
+      >
+        <T v="title">{textStep.title}</T>
+        <T v="body" color={colors.text2} style={{ marginBottom: 16 }}>
+          {textStep.sub}
+        </T>
+        {step === "name" && (
+          <>
+            <Field>
+              <TextInput
+                testID="name-input"
+                style={s.input}
+                value={name}
+                onChangeText={setName}
+                placeholder="Your first name"
+                placeholderTextColor={colors.text3}
+                autoFocus
+                autoCapitalize="words"
+                maxLength={30}
+                returnKeyType="next"
+                onSubmitEditing={() => name.trim() && next()}
+              />
+            </Field>
+            <Field>
+              <TextInput
+                style={s.input}
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="Your number (optional)"
+                placeholderTextColor={colors.text3}
+                keyboardType="phone-pad"
+                textContentType="telephoneNumber"
+              />
+            </Field>
+          </>
+        )}
+        {step === "medical" && (
+          <Field>
+            <TextInput
+              style={[s.input, { minHeight: 120, textAlignVertical: "top" }]}
+              value={medical}
+              onChangeText={setMedical}
+              placeholder="e.g. Allergic to penicillin. Asthma, inhaler in my bag."
+              placeholderTextColor={colors.text3}
+              multiline
+              maxLength={600}
+            />
+          </Field>
+        )}
+        {step === "contact" && (
+          <>
+            <Field>
+              <TextInput style={s.input} value={contactName} onChangeText={setContactName} placeholder="Name (e.g. Mom)" placeholderTextColor={colors.text3} autoCapitalize="words" />
+            </Field>
+            <Field>
+              <TextInput
+                style={s.input}
+                value={contactPhone}
+                onChangeText={setContactPhone}
+                placeholder="Phone number"
+                placeholderTextColor={colors.text3}
+                keyboardType="phone-pad"
+                textContentType="telephoneNumber"
+              />
+            </Field>
+          </>
+        )}
+      </KeyboardScreen>
     </Screen>
   );
 }
