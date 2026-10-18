@@ -491,6 +491,7 @@ export function startServer(opts: AppOptions = {}) {
         if (c.status !== "pending") return json({ error: "a check-in is already being scored" }, 409);
         afterAction(g);
         const delay = Math.max(0, Math.min(15_000, Number(b.delayMs ?? 2500)));
+        c.deadline = Math.max(c.deadline, now + delay + 30_000); // the stage is "answering" while the clip plays
         const live = g.demoAnswerMode === "live";
         const run = async () => {
           if (live) {
@@ -501,6 +502,8 @@ export function startServer(opts: AppOptions = {}) {
           } else {
             await g.answerCheckin(s, c.id, { text: CANNED[action], source: `demo script: ${action}`, canned: true });
           }
+          // Step ④ always ends in the takeover, whatever the engine made of the clip.
+          if (action === "slurred" && g.status === "active" && g.members.has(s.id) && s.esc.stage === 0) g.escalate(s, "Wingman", Date.now());
           if (g.status === "active") afterAction(g);
         };
         if (b.wait) {

@@ -1,4 +1,4 @@
-# Wingman protocol (v3)
+# Wingman protocol (v4)
 
 The contract between the Wingman server and its clients: the native iPhone app (`mobile/`), the projector stage view
 and the minimal web fallback. Types live in [`shared/protocol.ts`](../shared/protocol.ts) (plain TS, no runtime
@@ -213,6 +213,14 @@ connected). The stage view is `/stage/:code?k=<stageKey>`. Simulated friends ans
 unless the storyline is driving them.
 
 ## CHANGELOG
+
+- **v4** (Oct 18 2026): `SignalBatch.prompted` = a pending check-in's id once its question has finished playing on an
+  open phone. The user then has 10 s to *start* answering (mic or first key → `answering`), else it's missed. Clients
+  that never send it get ~25 s from the ask on an open phone; a backgrounded phone keeps `checkinTimeoutMs`.
+  `Checkin.promptedAt`. A missed check-in now raises the alert (except a routine scheduled one on a real night); so
+  does one impaired answer at ≥ 0.75. Scoring always ends within 15 s: if no engine can check a voice reply it is
+  `outcome: "impaired"`, `result.model: "unscored"` ("answered, but Wingman couldn't check it"), never a silent OK.
+  Additive.
 
 - **v3** (Oct 18 2026): `SignalBatch.answering` = the pending check-in's id while the user is recording or typing a
   reply (send when the mic starts / the first key lands, then every ~5 s). Each one holds `Checkin.deadline` at least

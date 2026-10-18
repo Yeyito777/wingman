@@ -5,6 +5,10 @@
 import {
   ANSWER_GRACE_MS,
   AWAY_WATCH_M,
+  IMPAIRED_ALERT,
+  SCORING_MAX_MS,
+  START_FALLBACK_MS,
+  START_WINDOW_MS,
   CHECKIN_PROMPTS,
   DEFAULT_GEOFENCE_M,
   DEFAULT_VENUE,
@@ -44,7 +48,7 @@ import { initialEscalation, step, type Effect, type EscEvent, type EscState } fr
 import type { Notifier } from "./notifier.ts";
 import type { Pusher } from "./push.ts";
 import { assessRisk, type RiskInput } from "./risk.ts";
-import { mockScore, scoreCheckin, type ScoreRequest } from "./scorer.ts";
+import { mockScore, scoreCheckin, unscored, type ScoreRequest } from "./scorer.ts";
 
 export interface GroupHooks {
   notifier: Notifier;
@@ -164,6 +168,8 @@ export class Group {
   demoSubjectId: string | null = null;
   /** demo: "canned" answers scored by the deterministic heuristic; "live" real audio through the AI engine */
   demoAnswerMode: "canned" | "live" = "canned";
+  /** scoring an answer never takes longer than this (tests shorten it) */
+  scoringMaxMs = SCORING_MAX_MS;
 
   private seq = 0;
   private colorIdx = 0;
@@ -245,6 +251,7 @@ export class Group {
       if (typeof b.motion.activity === "string") m.activity = b.motion.activity;
     }
     if (b.interaction) m.lastInteractionAt = now;
+    if (typeof b.prompted === "string") this.prompted(m, b.prompted, now);
     if (typeof b.answering === "string") this.answering(m, b.answering, now);
     if (b.fall && typeof b.fall === "object") this.fall(m, now, Number(b.fall.peakG) || null);
   }
@@ -319,6 +326,9 @@ export class Group {
       status: "pending",
       autoListen: !this.demo || trigger === "manual",
     };
+    // On an open phone the answer has to *start* soon (10 s after the question finishes, reported by the phone; this
+    // is the fallback for clients that don't report it). Once it has started, `answering` holds the deadline.
+    if (this.startWindow(m)) c.deadline = now + Math.min(timeoutMs, START_FALLBACK_MS);
     m.checkins.push(c);
     if (m.checkins.length > 30) m.checkins.shift();
     m.lastCheckinAskedAt = now;
@@ -332,6 +342,20 @@ export class Group {
       }, 1500);
     }
     return c;
+  }
+
+  /** Is this member's check-in held to the 10-second start window? Not for simulated friends or a member the demo
+   *  storyline is driving (the stage answers for them), and not for a phone that isn't open (a push has to reach them). */
+  private startWindow(m: Member) {
+    return !m.simulated && !m.scripted && m.sockets > 0 && m.appState === "foreground";
+  }
+
+  /** The question finished playing on the phone: the 10-second window to start answering runs from now. */
+  prompted(m: Member, checkinId: string, now: number) {
+    const c = m.pendingCheckin;
+    if (!c || c.id !== checkinId || c.status !== "pending" || c.answeringAt || c.promptedAt || !this.startWindow(m)) return;
+    c.promptedAt = now;
+    c.deadline = now + START_WINDOW_MS;
   }
 
   /** The member started (or is still) recording / typing a reply: hold the deadline while it's in progress. */
@@ -355,9 +379,14 @@ export class Group {
     this.hooks.broadcast(this);
     const req: ScoreRequest = { question: c.prompt, name: m.name, audio: ans.audio, text: ans.text };
     // (When both audio and text are present, AI engines listen to the audio; the offline heuristic reads the text.)
+    // Scoring always ends within SCORING_MAX_MS: a slow or failing AI leaves the answer "answered, unconfirmed".
+    const t0 = Date.now();
     const result: CheckinResult = ans.canned
       ? { ...mockScore(req), engine: "mock", model: "demo script", latencyMs: 0 }
-      : await (this.hooks.score ?? scoreCheckin)(req);
+      : await withTimeout((this.hooks.score ?? scoreCheckin)(req), this.scoringMaxMs).catch((e) => {
+          console.warn(`[scorer] ${m.name}'s answer: ${String((e as Error)?.message ?? e).slice(0, 120)}`);
+          return { ...unscored("scoring took too long"), engine: "mock" as const, latencyMs: Date.now() - t0 };
+        });
     if (this.status !== "active" || c.status !== "scoring" || !this.members.has(m.id)) return { ok: false, error: "check-in was cleared while scoring" };
     this.finishCheckin(m, c, result, Date.now());
     return { ok: true, checkin: c };
@@ -373,17 +402,30 @@ export class Group {
       this.log("ok", `${m.name}'s check-in OK:${said} → ${r.reason} [${eng}]`, m.id, now);
       this.resolve(m, m.name, "coherent check-in", now);
     } else if (c.outcome === "impaired") {
-      this.log("alert", `${m.name}'s check-in sounded impaired (${Math.round(r.impairment * 100)}%):${said} → ${r.reason} [${eng}]`, m.id, now);
+      this.log("alert", `${m.name}'s check-in ${r.model === "unscored" ? "couldn't be checked" : `sounded impaired (${Math.round(r.impairment * 100)}%)`}:${said} → ${r.reason} [${eng}]`, m.id, now);
     } else {
       this.log("alert", `No intelligible answer from ${m.name} [${eng}].`, m.id, now);
     }
     this.evaluate(m, now);
+    // A clearly impaired (or unintelligible) answer raises the alert by itself.
+    if (m.esc.stage === 0 && (c.outcome === "missed" || (c.outcome === "impaired" && r.impairment >= IMPAIRED_ALERT))) {
+      this.escalate(m, "Wingman", now);
+      this.hooks.broadcast(this);
+    }
   }
 
   private missCheckin(m: Member, c: Checkin, now: number) {
     c.status = "done";
     c.outcome = "missed";
-    this.log("alert", `${m.name} missed a check-in (no answer within ${Math.round((c.deadline - c.askedAt) / 1000)} s).`, m.id, now);
+    const why = c.answeringAt
+      ? `stopped answering ${Math.round((now - c.answeringAt) / 1000)} s ago`
+      : c.promptedAt
+        ? `didn't start answering within ${Math.round((c.deadline - c.promptedAt) / 1000)} s of the question`
+        : `no answer within ${Math.round((c.deadline - c.askedAt) / 1000)} s`;
+    this.log("alert", `${m.name} missed a check-in (${why}).`, m.id, now);
+    // A missed check-in raises the alert (friends, then bystander mode, …), except a routine one on a real night:
+    // that adds risk and gets a follow-up check-in first.
+    if (m.esc.stage === 0 && (this.demo || c.trigger !== "scheduled")) this.escalate(m, "Wingman", now);
   }
 
   // ---------- demo controls ----------
@@ -548,6 +590,10 @@ export class Group {
       }
       const pending = m.pendingCheckin;
       if (pending && pending.status === "pending" && now >= pending.deadline) this.missCheckin(m, pending, now);
+      // Safety net: an answer is never stuck "scoring".
+      if (pending && pending.status === "scoring" && now - (pending.answeredAt ?? now) > this.scoringMaxMs + 5000) {
+        this.finishCheckin(m, pending, { ...unscored("scoring never finished"), engine: "mock", latencyMs: now - pending.answeredAt! }, now);
+      }
       if (this.timers.checkinEveryMs > 0 && m.esc.stage === 0 && !m.pendingCheckin && now - m.lastCheckinAskedAt >= this.timers.checkinEveryMs) {
         this.askCheckin(m, "scheduled", now);
       }
@@ -831,4 +877,14 @@ function cap(s: string) {
 function clock(t: number, tzOffset: number) {
   const d = new Date(t - tzOffset * 60_000);
   return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:${String(d.getUTCSeconds()).padStart(2, "0")}`;
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`scoring timed out after ${ms} ms`)), ms);
+    p.then(
+      (v) => (clearTimeout(t), resolve(v)),
+      (e) => (clearTimeout(t), reject(e)),
+    );
+  });
 }

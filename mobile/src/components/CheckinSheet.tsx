@@ -11,14 +11,16 @@ import { Animated, Easing, Platform, Pressable, TextInput, View } from "react-na
 import { SafeAreaView } from "react-native-safe-area-context";
 import { audioMode, chimeAndWait, play, tap } from "../services/alarm";
 import { speakFully } from "../services/voice";
+import { ApiError } from "../api/client";
 import { answerCheckin, sendSignals } from "../services/session";
 import { dispatch } from "../state/store";
 import { colors, font } from "../theme";
 import { KeyboardScreen } from "./KeyboardScreen";
 import { Button, LinkButton, T } from "./ui";
 
-const MAX_MS = 8000;
-const SILENCE_MS = 1400;
+/** Longest answer; the sheet counts it down. ~20 s of mono AAC is a few hundred KB. */
+const MAX_MS = 20_000;
+const SILENCE_MS = 2000;
 const VOICE_DB = -38;
 
 type Phase = "asking" | "ready" | "listening" | "thinking" | "ok" | "notok" | "typing" | "error";
@@ -26,6 +28,8 @@ type Phase = "asking" | "ready" | "listening" | "thinking" | "ok" | "notok" | "t
 export function CheckinSheet({ checkin }: { checkin: Checkin }) {
   const [phase, setPhase] = useState<Phase>("asking");
   const [level, setLevel] = useState(0);
+  const [left, setLeft] = useState(MAX_MS / 1000);
+  const lastAnswer = useRef<Parameters<typeof answerCheckin>[1] | null>(null);
   const [typed, setTyped] = useState("");
   const [note, setNote] = useState("");
   const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, numberOfChannels: 1, isMeteringEnabled: true });
@@ -47,6 +51,8 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
       const r = await speakFully(checkin.prompt, () => alive.current && asking.current);
       if (!alive.current || !asking.current) return;
       asking.current = false;
+      // The question is out: from now the server gives 10 s to start answering (mic or first key).
+      sendSignals({ prompted: checkin.id });
       if (r === "done" && checkin.autoListen) listen();
       else setPhase((p) => (p === "asking" ? "ready" : p));
     })();
@@ -90,6 +96,7 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
       recorder.stop().catch(() => {});
       return;
     }
+    setLeft(MAX_MS / 1000);
     setPhase("listening");
     markAnswering();
     const started = Date.now();
@@ -101,6 +108,7 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
       const db = st.metering ?? -160;
       setLevel(Math.max(0, Math.min(1, (db + 55) / 45)));
       const now = Date.now();
+      setLeft(Math.max(0, Math.ceil((MAX_MS - (now - started)) / 1000)));
       if (db > VOICE_DB) {
         spoke = true;
         lastVoice = now;
@@ -127,6 +135,7 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
   }
 
   async function submit(a: { text?: string; audio?: string; mime?: string; durationMs?: number }) {
+    lastAnswer.current = a;
     setPhase("thinking");
     answeringSent.current = 0;
     markAnswering(); // the upload itself can take a few seconds on a bad connection
@@ -146,6 +155,13 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
       }
     } catch (e) {
       if (!alive.current) return;
+      // 409: the server already settled this check-in (answered, or timed out): nothing left to send.
+      if (e instanceof ApiError && e.status === 409) {
+        setNote("This check-in already closed.");
+        setPhase("notok");
+        setTimeout(close, 2500);
+        return;
+      }
       setNote((e as Error).message);
       setPhase("error");
     }
@@ -188,13 +204,13 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
                 </>
               ) : phase === "error" ? (
                 <>
-                  <Button title="Try again" onPress={() => setPhase("ready")} />
+                  <Button title="Try again" onPress={() => (lastAnswer.current ? submit(lastAnswer.current) : setPhase("ready"))} />
                   <LinkButton title="Close" onPress={close} />
                 </>
               ) : phase === "ok" || phase === "notok" ? null : (
                 <>
                   <T v="callout" color={colors.text2} center>
-                    {phase === "asking" ? "Listen…" : phase === "ready" ? "Tap the mic and answer out loud" : phase === "listening" ? "Listening — tap when you're done" : "Checking your answer…"}
+                    {phase === "asking" ? "Listen…" : phase === "ready" ? "Tap the mic and answer out loud" : phase === "listening" ? `Listening… ${left} s left · tap when you're done` : "Checking your answer…"}
                   </T>
                   {phase !== "thinking" && <LinkButton title="Type instead" onPress={typeInstead} />}
                 </>

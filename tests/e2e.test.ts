@@ -231,12 +231,13 @@ describe("check-ins", () => {
     expect((await call(`/api/groups/${code}/members/${m!.memberId}/checkins/${ping.body.checkin.id}/answer`, s!.key, { text: "hi" })).status).toBe(403);
     r = await call(`/api/groups/${code}/members/${m!.memberId}/checkins/${ping.body.checkin.id}/answer`, m!.key, { text: "Uhh... dunno... where am i" });
     expect(r.body.checkin.outcome).toBe("impaired");
-    // Sam sees the outcome and reason, but not the words, outside an alert.
+    // A clearly impaired answer raises the alert by itself, so Sam now sees the words too (revealed during an alert).
     const sv = (await call(`/api/groups/${code}/view`, s!.key)).body as GroupView;
     const mm = sv.members.find((x) => x.id === m!.memberId)!;
     expect(mm.lastCheckin?.outcome).toBe("impaired");
     expect(mm.lastCheckin?.result?.reason).toBeTruthy();
-    expect(mm.lastCheckin?.result?.transcript).toBe("");
+    expect(mm.alert?.stage).toBe(1);
+    expect(mm.lastCheckin?.result?.transcript).toBe("Uhh... dunno... where am i");
     await call(`/api/groups/${code}/end`, m!.key, {});
   });
 

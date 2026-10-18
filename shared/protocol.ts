@@ -7,7 +7,7 @@
 // affected member's phone (L2), then that member's emergency contact is notified (L3). Several members can be in
 // alert at once.
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Join codes: 6 chars from this alphabet (no 0/O/1/I/L), case-insensitive on input. */
 export const JOIN_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -128,6 +128,8 @@ export interface Checkin {
   deadline: Millis;
   /** v3: last "answering" signal from the member's phone (they're recording or typing a reply) */
   answeringAt?: Millis;
+  /** v4: when the question finished playing on the phone (SignalBatch.prompted) */
+  promptedAt?: Millis;
   status: "pending" | "scoring" | "done";
   /** start recording automatically after speaking the prompt (false for automatic check-ins in demo mode) */
   autoListen: boolean;
@@ -387,6 +389,12 @@ export interface SignalBatch {
    * mid-answer still counts as missed ~50 s later.
    */
   answering?: string;
+  /**
+   * v4: the id of a pending check-in whose question has just finished playing on screen (TTS done, mic / keyboard
+   * ready). From then the user has START_WINDOW_MS (10 s) to start answering (mic or first key, `answering`), or it
+   * counts as missed. Clients that never send it get ~25 s from the ask on an open phone.
+   */
+  prompted?: string;
 }
 
 export interface SensorReport {

@@ -36,6 +36,16 @@ export const DEMO_TIMERS: Timers = {
 /** A check-in being answered (recording / typing) can't time out until this long after the last "answering" signal. */
 export const ANSWER_GRACE_MS = 50_000;
 
+/** A check-in shown on an open phone must be *started* (mic or first key) within this long after the question
+ *  finished playing (SignalBatch.prompted), else it counts as missed. */
+export const START_WINDOW_MS = 10_000;
+/** …or, for clients that never report "prompted", this long after it was asked (chime + spoken question + window). */
+export const START_FALLBACK_MS = 25_000;
+/** Scoring an answer never takes longer than this: past it, the answer counts as "answered, unconfirmed". */
+export const SCORING_MAX_MS = 15_000;
+/** One impaired answer this bad raises the alert by itself. */
+export const IMPAIRED_ALERT = 0.75;
+
 /** Distance thresholds (metres) beyond position uncertainty. */
 export const AWAY_WATCH_M = 150;
 export const AWAY_FAR_M = 300;

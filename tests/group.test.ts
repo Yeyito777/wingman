@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { CANNED, Group, type GroupHooks } from "../src/server/group.ts";
-import { ANSWER_GRACE_MS } from "../src/shared/config.ts";
+import { ANSWER_GRACE_MS, START_FALLBACK_MS, START_WINDOW_MS } from "../src/shared/config.ts";
 import type { PushMessage } from "../src/server/push.ts";
 import { haversineM, offset } from "../src/shared/geo.ts";
 import type { ServerMsg } from "../src/shared/types.ts";
@@ -168,6 +168,118 @@ describe("group engine", () => {
       g.signals(a, { answering: "c_other" }, 30_000);
       expect(c.deadline).toBe(70_000);
       expect(c.answeringAt).toBeUndefined();
+    });
+  });
+
+  describe("10-second start window on an open phone", () => {
+    const setup = () => {
+      const { g, add } = harness();
+      const [a] = [add("A"), add("B")];
+      a.sockets = 1; // the app is open (foreground)
+      g.fall(a, 10_000, 3.4); // → a check-in
+      const c = a.pendingCheckin!;
+      const run = (from: number, to: number) => {
+        for (let t = from; t <= to; t += 1000) {
+          g.tick(t);
+          if (a.esc.stage > 0) return t;
+        }
+        return null;
+      };
+      return { g, a, c, run };
+    };
+
+    test("never started within 10 s of the question finishing → missed → friends alerted", () => {
+      const { g, a, c, run } = setup();
+      g.signals(a, { prompted: c.id }, 16_000); // TTS done on the phone
+      expect(c.deadline).toBe(16_000 + START_WINDOW_MS);
+      expect(run(11_000, 25_000)).toBeNull();
+      expect(run(26_000, 30_000)).toBe(26_000);
+      expect(c.outcome).toBe("missed");
+      expect(a.esc.stage).toBe(1);
+    });
+
+    test("started at 8 s, submitted later: OK, no alert", async () => {
+      const { g, a, c, run } = setup();
+      g.signals(a, { prompted: c.id }, 16_000);
+      expect(run(11_000, 23_000)).toBeNull();
+      g.signals(a, { answering: c.id }, 24_000); // mic started 8 s after the question
+      for (let t = 30_000; t <= 60_000; t += 6_000) {
+        g.signals(a, { answering: c.id }, t);
+        expect(run(t - 5_000, t)).toBeNull();
+      }
+      await g.answerCheckin(a, c.id, { text: CANNED.coherent, source: "voice", canned: true });
+      expect(c.outcome).toBe("ok");
+      expect(run(61_000, 200_000)).toBeNull();
+    });
+
+    test("a client that never reports the question finishing gets ~25 s from the ask", () => {
+      const { a, c, run } = setup();
+      expect(c.deadline).toBe(10_000 + START_FALLBACK_MS);
+      expect(run(11_000, 34_000)).toBeNull();
+      expect(run(35_000, 40_000)).toBe(35_000);
+      expect(a.esc.stage).toBe(1);
+    });
+
+    test("a phone that isn't open keeps the normal timeout (a push has to reach it first)", () => {
+      const { g, add } = harness();
+      const [a] = [add("A"), add("B")];
+      g.fall(a, 10_000, 3.4);
+      expect(a.pendingCheckin!.deadline).toBe(10_000 + g.timers.checkinTimeoutMs);
+    });
+  });
+
+  describe("an answer always resolves", () => {
+    const withScorer = (score: GroupHooks["score"]) => {
+      const { g: base } = harness();
+      const g = new Group("SCORE1", { name: "T" }, { ...base.hooks, score }, 1_000);
+      const a = g.addMember({ name: "A", pin: "1234", consent: true }, 1_000);
+      g.addMember({ name: "B", pin: "1234", consent: true }, 1_000);
+      g.scoringMaxMs = 80;
+      return { g, a };
+    };
+    const voice = { audio: { data: new Uint8Array(20_000), mime: "audio/m4a" }, source: "voice" };
+
+    test("a scorer that never answers: 'answered, couldn't be checked' within the cap, never stuck pending", async () => {
+      const { g, a } = withScorer(() => new Promise(() => {}));
+      const c = g.askCheckin(a, "manual", 2_000);
+      const t0 = Date.now();
+      const r = await g.answerCheckin(a, c.id, voice);
+      expect(Date.now() - t0).toBeLessThan(1000);
+      expect(r.ok).toBe(true);
+      expect(c.status).toBe("done");
+      expect(c.outcome).toBe("impaired"); // unconfirmed: doesn't clear earlier signals
+      expect(c.result!.model).toBe("unscored");
+      expect(c.result!.reason).toContain("couldn't check");
+      expect(a.esc.stage).toBe(0); // moderate risk, not an alert by itself
+    });
+
+    test("a scorer that throws resolves the same way", async () => {
+      const { g, a } = withScorer(async () => {
+        throw new Error("gemini 503");
+      });
+      const c = g.askCheckin(a, "manual", 2_000);
+      await g.answerCheckin(a, c.id, voice);
+      expect(c.status).toBe("done");
+      expect(c.result!.model).toBe("unscored");
+    });
+
+    test("an unconfirmed answer after a fall doesn't clear it; a clearly impaired one alerts by itself", async () => {
+      const { g, a } = withScorer(async () => ({ engine: "gemini", transcript: "uh", responded: true, coherent: false, impairment: 0.9, signs: [], reason: "slurred", latencyMs: 1 }));
+      const c = g.askCheckin(a, "manual", 2_000);
+      await g.answerCheckin(a, c.id, voice);
+      expect(c.outcome).toBe("impaired");
+      expect(a.esc.stage).toBe(1);
+    });
+
+    test("a mildly impaired answer: friends see the outcome but not the words (outside an alert)", async () => {
+      const { g, a } = withScorer(async () => ({ engine: "gemini", transcript: "secret words", responded: true, coherent: false, impairment: 0.55, signs: [], reason: "a bit vague", latencyMs: 1 }));
+      const c = g.askCheckin(a, "manual", 2_000);
+      await g.answerCheckin(a, c.id, voice);
+      expect(a.esc.stage).toBe(0);
+      const b = [...g.members.values()].find((x) => x !== a)!;
+      const seen = g.view(b.id, 3_000).members.find((x) => x.id === a.id)!;
+      expect(seen.lastCheckin?.outcome).toBe("impaired");
+      expect(seen.lastCheckin?.result?.transcript).toBe("");
     });
   });
 });

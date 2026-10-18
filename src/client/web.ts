@@ -132,7 +132,9 @@ function member(c: string, me: { memberId: string; key: string }) {
     if (c && c.status === "pending" && spoken !== c.id) {
       spoken = c.id;
       chime();
-      void speak(c.prompt);
+      const id = c.id;
+      // The question is out: the server gives 10 s from now to start typing.
+      void speak(c.prompt).then(() => ws.send({ t: "signals", prompted: id }));
     }
   };
 

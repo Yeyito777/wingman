@@ -58,6 +58,24 @@ export function availableEngines(env = process.env): Engine[] {
   return all;
 }
 
+/** Per AI engine (all its models): a voice reply normally scores in ~2 s; past this we fall back rather than keep the
+ *  person (and the stage) waiting. */
+const AI_TIMEOUT_MS = Number(process.env.SCORER_TIMEOUT_MS) || 9000;
+
+/** An answer nobody could check: it did come in, but it's not a confirmed "OK". Moderate risk (not an alert by itself),
+ *  doesn't clear earlier signals, and says so. */
+export function unscored(why: string): Raw {
+  return {
+    model: "unscored",
+    transcript: "",
+    responded: true,
+    coherent: false,
+    impairment: 0.6,
+    signs: ["not checked"],
+    reason: `answered, but Wingman couldn't check it (${why})`,
+  };
+}
+
 const cache = new Map<string, CheckinResult>();
 const CACHE_MAX = 200;
 
@@ -70,11 +88,16 @@ export async function scoreCheckin(req: ScoreRequest, engines = availableEngines
   for (const engine of engines) {
     const t0 = performance.now();
     try {
-      const raw = await withTimeout(run(engine, req), engine === "mock" ? 1000 : 20_000);
-      const result: CheckinResult = { ...normalize(raw), engine, latencyMs: Math.round(performance.now() - t0) };
+      const raw = await withTimeout(run(engine, req), engine === "mock" ? 1000 : AI_TIMEOUT_MS);
+      // The offline heuristic can't hear audio. As a fallback for a failed AI it must not call an unheard voice reply
+      // "OK" (that cleared a real fall during the Oct 18 demo): it's answered but unconfirmed.
+      const fellBack = engine === "mock" && failed && req.audio && !req.text;
+      const result: CheckinResult = { ...(fellBack ? unscored("the AI didn't respond in time") : normalize(raw)), engine, latencyMs: Math.round(performance.now() - t0) };
       if (failed) result.fallbackFrom = failed;
-      if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value!);
-      cache.set(key, result);
+      if (!failed) {
+        if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value!);
+        cache.set(key, result);
+      }
       return result;
     } catch (err) {
       failed = `${engine}: ${String((err as Error)?.message ?? err).slice(0, 160)}`;
