@@ -54,8 +54,9 @@ try {
   await page.keyboard.press("d"); // presenter details
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${OUT}/5-stage-alert-presenter.png` });
-  await page.click('.dk-steps li[data-step="5"]'); // Sam: on my way, then found & OK
-  await page.waitForSelector(".st-alarm.hidden", { state: "attached", timeout: 15000 }).catch(() => errors.push("alert not resolved by clicking the last step"));
+  await expectText("#next", "Done"); // the story ends at the escalation
+  await post(`/api/groups/${d.code}/members/${j.memberId}/resolve`, j.key, { pin: "1234" }); // the PIN on the phone
+  await page.waitForSelector(".st-alarm.hidden", { state: "attached", timeout: 15000 }).catch(() => errors.push("alert not resolved by the PIN"));
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${OUT}/6-stage-resolved-presenter.png` });
   clearInterval(hb);

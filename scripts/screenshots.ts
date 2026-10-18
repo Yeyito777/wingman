@@ -143,10 +143,10 @@ try {
   await stage.waitForFunction(() => document.querySelector(".ladder li.now")?.textContent?.includes("Emergency"), null, { timeout: 9000 });
   await stage.waitForSelector(".sms", { timeout: 4000 });
   await shot(stage, "08-stage-alert-l3");
-  await stage.keyboard.press("ArrowRight"); // Sam: on my way
+  await demo("ack"); // Sam: on my way (a real feature; no longer a story step)
   await stage.waitForSelector(".acks", { timeout: 4000 });
   await shot(stage, "09-stage-ack");
-  await stage.keyboard.press("ArrowRight"); // Sam: found & OK
+  await demo("resolve"); // Sam: found & OK
   await stage.waitForSelector(".st-alarm.hidden", { state: "attached", timeout: 4000 });
   await shot(stage, "10-stage-resolved");
 

@@ -106,17 +106,14 @@ try {
   else log(`  LEVEL 3: ${sms.simulated ? "simulated" : "real"} SMS to ${sms.toName}`);
   void v3;
 
-  await stage.waitForTimeout(5_000);
-  await press(5, "Sam: I'm on my way");
-  await stage.waitForSelector(".acks", { timeout: 5000 }).catch(() => fail("ack not shown on stage"));
-  if (!msgs.some((m) => m.t === "ack" && m.you && m.ack.byName === "Sam")) await stage.waitForTimeout(500);
-  if (!msgs.some((m) => m.t === "ack" && m.you && m.ack.byName === "Sam")) fail("phone didn't get Sam's ack");
-  else log("  phone told: Sam is on the way");
-
+  if ((await stage.textContent("#next"))?.includes("Done") !== true) fail("dock doesn't show Done after the last step");
   await stage.waitForTimeout(3_000);
-  await press(6, "Sam: found & OK");
+  const wrong = await fetch(`${app.url}/api/groups/${d.code}/members/${me.memberId}/resolve`, { method: "POST", headers: { authorization: `Bearer ${me.key}`, "content-type": "application/json" }, body: JSON.stringify({ pin: "0000" }) });
+  if (wrong.status !== 401) fail(`wrong PIN gave ${wrong.status}`);
+  const r = await post(`/api/groups/${d.code}/members/${me.memberId}/resolve`, me.key, { pin: "1234" });
+  log(`phone: PIN 1234 entered → ${r.ok ? "resolved" : "FAILED"}`);
   await stage.waitForSelector(".st-alarm.hidden", { state: "attached", timeout: 5000 }).catch(() => fail("alarm didn't clear"));
-  await expectStage(0, "after found & OK");
+  await expectStage(0, "after the PIN");
   const mineAlerts = msgs.filter((m) => m.t === "alert" && m.you).map((m) => (m as any).alert.stage);
   if (JSON.stringify(mineAlerts) !== "[1,2,3]") fail(`phone alert sequence ${JSON.stringify(mineAlerts)}`);
   else log("  phone saw alerts [1,2,3] and resolved");

@@ -310,6 +310,10 @@ describe("demo groups and the stage view", () => {
       if (s.action === "slurred") await until("phone in alert", () => stage.view?.alerts[0]?.memberId === y.memberId);
       if (s.action === "slurred") await until("L3", () => stage.view?.alerts[0]?.stage === 3, 6000);
     }
+    expect(stage.view?.alerts[0]?.stage).toBe(3); // the scripted story ends at the escalation
+    // Still real features: a friend's "on my way" and "found & OK" (here via the demo actions, as Sam).
+    expect((await call(`/api/groups/${code}/demo/ack`, stageKey, {})).status).toBe(200);
+    expect((await call(`/api/groups/${code}/demo/resolve`, stageKey, {})).status).toBe(200);
     await until("resolved", () => stage.view?.alerts.length === 0);
     expect(stage.stages.get(y.memberId)).toEqual([0, 1, 2, 3, 0]);
     expect(stage.view!.events.some((e) => /Sam is on the way to Yeyito/.test(e.text))).toBe(true);

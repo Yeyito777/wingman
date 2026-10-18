@@ -51,7 +51,7 @@ real instead (labelled "Gemini" on screen; safe: if every engine fails the scrip
 | **2:10–2:25** | "Every alert explains itself: a deterministic, unit-tested risk engine; the AI is one signal. But they're on the dance floor. 15 seconds later…" | Point at the countdown. | Ladder: *Bystander mode in 12 s* |
 | **2:25–2:45** | "…my own phone asks strangers for help." | **Hold the phone up.** | Phone: bystander mode, siren, medical info, Call 911. "I can't cancel it by accident: it needs my PIN." |
 | **2:45–2:55** | "Still nobody? My mom gets a text with my location." | Wait for L3. | SMS card: *SMS → Mom* (SIMULATED unless Twilio) |
-| **2:55–3:15** | "Sam sees it and taps **I'm on my way**. Everyone sees who's coming, so the group doesn't all run, and the ladder pauses. Sam finds me: **found & OK**." | **Clicker ⑤** (Sam acks), **Clicker ⑥** (Sam: found & OK). Or enter **1234** on the phone. | "Sam is on the way", then everything back to green |
+| **2:55–3:15** | "And it only stops when someone who knows me says so. My friends' phones offer *I'm on my way* and *found & OK*, and I can cancel it myself, but only with **my PIN**, so someone confused, or someone who took my phone, can't." | Enter **1234** on the phone (bystander screen → *I'm OK*). The dock reads **Done ✓**. | Everything back to green |
 | **3:15–3:45** | "And it's symmetric: if Maya had gone down, *my* phone would be the one buzzing, with her location and medical info. Privacy is built in: everyone opts in, friends see your medical info only during your alert, and when the night ends everything is deleted, with no database. Built solo in 36 hours: a native iPhone app, a Bun + TypeScript server, **Gemini audio understanding** for check-ins, Twilio for SMS, on **Vultr**." | (Optional) **S** to make Maya the subject and show your phone getting her alert, if time allows. | |
 | **3:45–4:00** | "The moment you need help most is the moment you can't ask for it. **Your friends' phones ask for you.**" | | |
 
@@ -61,9 +61,10 @@ or the "…'s story" button in the dock) · **A** scripted ↔ real-audio answer
 
 **Dock:** the highlighted step is the one in progress (the last one run), earlier ones are ✓, and **Next: <step> ▶**
 says what comes next (**Done ✓ · Reset ↺** at the end). **Mouse:** the steps are clickable. Clicking the upcoming
-step (or Next) runs it; clicking a later step runs
-every step up to it, paced so each lands (e.g. click *Fall* to play Drift away + Fall; a friend's *on my way* waits for
-the alert to start); clicking an earlier step rewinds to it without undoing anything (Shift+R for a clean slate).
+step (or Next) runs it; clicking a later step runs every step up to it, paced so each lands (e.g. click *Fall* to
+play Drift away + Fall); clicking an earlier step rewinds to it without undoing anything (Shift+R for a clean slate).
+The story ends at the escalation (bystander mode, then the emergency contact): resolve it with the PIN on the phone,
+or Shift+R.
 
 **Variant: Maya is the one in trouble** (shows your phone as the guardian): click Maya's card (or press S), run
 ②③④. Your phone alerts *"Maya may need help"*; tap **I'm on my way**, then **Found & OK** on the phone.
