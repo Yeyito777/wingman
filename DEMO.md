@@ -6,7 +6,7 @@ when one of them can't ask for help, **every other phone in the group** asks for
 
 **Setup:** the projector shows the laptop's **stage view**: the whole group (you + simulated friends Sam, Maya and Leo
 who move and heartbeat on the server), a live map, and a slim presenter dock along the bottom (the storyline steps and
-**Next ▶**). Your iPhone runs the Wingman app and is a real member of the group. A presentation clicker (or →, or a
+**Next: <step> ▶**). Your iPhone runs the Wingman app and is a real member of the group. A presentation clicker (or →, or a
 click on a step / Next ▶) advances the story.
 
 The scripted path is deterministic: canned answers are scored by the deterministic engine, timers are fixed (L1→L2
@@ -59,7 +59,9 @@ real instead (labelled "Gemini" on screen; safe: if every engine fails the scrip
 or the "…'s story" button in the dock) · **A** scripted ↔ real-audio answers · **D** / **?** presenter details ·
 **Shift+R** reset.
 
-**Mouse:** the dock's steps are clickable. Clicking the current step (or **Next ▶**) runs it; clicking a later step runs
+**Dock:** the highlighted step is the one in progress (the last one run), earlier ones are ✓, and **Next: <step> ▶**
+says what comes next (**Done ✓ · Reset ↺** at the end). **Mouse:** the steps are clickable. Clicking the upcoming
+step (or Next) runs it; clicking a later step runs
 every step up to it, paced so each lands (e.g. click *Fall* to play Drift away + Fall; a friend's *on my way* waits for
 the alert to start); clicking an earlier step rewinds to it without undoing anything (Shift+R for a clean slate).
 

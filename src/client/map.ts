@@ -36,7 +36,7 @@ export function createMap(el: HTMLElement) {
           p = L.marker(ll, { zIndexOffset: 500 }).addTo(map).bindTooltip(esc(m.name), { permanent: true, direction: "right", offset: [16, 0], className: "pin-label" });
           pins.set(m.id, p);
         }
-        p.setLatLng(ll).setIcon(icon(alert ? "#ef4444" : m.color, alert, m.name.charAt(0).toUpperCase())).setZIndexOffset(alert ? 1000 : 500);
+        p.setLatLng(ll).setIcon(icon(alert ? "#ff453a" : m.color, alert, m.name.charAt(0).toUpperCase())).setZIndexOffset(alert ? 1000 : 500);
         pts.push(ll);
         let ring = rings.get(m.id);
         if (m.fix.accuracy > 150) {
@@ -51,7 +51,7 @@ export function createMap(el: HTMLElement) {
         let line = links.get(m.id);
         if (far) {
           const path: L.LatLngExpression[] = [[near.lat, near.lng], ll];
-          if (!line) links.set(m.id, (line = L.polyline(path, { color: "#ef4444", weight: 3, dashArray: "6 8" }).addTo(map)));
+          if (!line) links.set(m.id, (line = L.polyline(path, { color: "#ff453a", weight: 3, dashArray: "6 8" }).addTo(map)));
           line.setLatLngs(path);
         } else if (line) {
           line.remove();

@@ -37,13 +37,14 @@ try {
   const expectText = async (sel: string, text: string, ms = 15000) => {
     await page.waitForFunction(([s, t]) => [...document.querySelectorAll(s!)].some((e) => e.textContent?.includes(t!)), [sel, text], { timeout: ms }).catch(() => errors.push(`expected "${text}" in ${sel}`));
   };
-  await page.click('.dk-steps li[data-step="0"]'); // clicking the current step runs it
+  await page.click('.dk-steps li[data-step="0"]'); // clicking the upcoming step runs it
   await expectText(".mcard", "Checking in");
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${OUT}/2-stage-checkin.png` });
   await page.click('.dk-steps li[data-step="2"]'); // clicking a later step runs everything up to it (drift, fall)
   await expectText(".mcard", "WATCH");
-  await expectText(".dk-steps li.now", "Slurred");
+  await expectText(".dk-steps li.now", "Fall"); // the step last run is highlighted…
+  await expectText("#next", "Next: Slurred answer"); // …and Next says what comes next
   await page.waitForTimeout(6000); // the drift walk finishes
   await page.screenshot({ path: `${OUT}/3-stage-watch.png` });
   await page.click("#next"); // Next ▶: the slurred answer (clip plays, then lands)

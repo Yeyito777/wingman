@@ -122,18 +122,24 @@ function renderAlarm(v: GroupView) {
 
 function renderSide(v: GroupView) {
   const subj = currentSubject(v);
+  // The highlighted step is the one in progress / last run (step - 1); earlier ones are done, upcoming ones plain.
+  const label = (i: number) => {
+    const s = STORY[i]!;
+    const who = s.by === "friend" ? friendName(v, subj) : "";
+    return who ? `${who}: ${s.label.replace(/^A friend: /, "")}` : s.label;
+  };
+  const current = step - 1;
   patch(
     $("#story"),
     STORY.map((s, i) => {
-      const who = s.by === "friend" ? friendName(v, subj) : "";
-      const label = who ? `${who}: ${s.label.replace(/^A friend: /, "")}` : s.label;
-      return `<li class="${i < step ? "done" : i === step ? "now" : ""}" data-step="${i}" title="${esc(s.hint)}"><b>${i < step ? "✓" : i + 1}</b>${esc(label)}</li>`;
+      const cls = i < current ? "done" : i === current ? "now" : "";
+      return `<li class="${cls}" data-step="${i}" title="${esc(s.hint)}"><b>${i < current ? "✓" : i + 1}</b>${esc(label(i))}</li>`;
     }).join(""),
   );
   const done = step >= STORY.length;
   const nextBtn = $("#next") as HTMLButtonElement;
-  nextBtn.textContent = done ? "Reset ↺" : "Next ▶";
-  nextBtn.title = done ? "Run it again (Shift+R)" : `Next: ${STORY[step]!.label} (→ / Space / clicker)`;
+  nextBtn.textContent = done ? "Done ✓ · Reset ↺" : `Next: ${label(step)} ▶`;
+  nextBtn.title = done ? "Run it again (Shift+R)" : `${STORY[step]!.hint} (→ / Space / clicker)`;
   patch($("#subject"), subj ? `<span class="dot" style="background:${subj.color}"></span>${esc(subj.name)}'s story` : "Waiting for members…");
   patch(
     $("#details"),
