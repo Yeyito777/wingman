@@ -7,7 +7,7 @@
 // affected member's phone (L2), then that member's emergency contact is notified (L3). Several members can be in
 // alert at once.
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** Join codes: 6 chars from this alphabet (no 0/O/1/I/L), case-insensitive on input. */
 export const JOIN_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -124,8 +124,10 @@ export interface Checkin {
   /** why it was asked: "scheduled", "suspicion: fall", "alert", "manual", "requested by Sam", "demo" */
   trigger: string;
   askedAt: Millis;
-  /** answer before this or it counts as missed */
+  /** answer before this or it counts as missed (pushed back while an answer is in progress: SignalBatch.answering) */
   deadline: Millis;
+  /** v3: last "answering" signal from the member's phone (they're recording or typing a reply) */
+  answeringAt?: Millis;
   status: "pending" | "scoring" | "done";
   /** start recording automatically after speaking the prompt (false for automatic check-ins in demo mode) */
   autoListen: boolean;
@@ -378,6 +380,13 @@ export interface SignalBatch {
   /** the user touched the app */
   interaction?: boolean;
   sensors?: Partial<SensorReport>;
+  /**
+   * v3: the id of the pending check-in the user is answering right now (recording, or typing). Send it when the mic
+   * starts or the first key lands, then every few seconds while it continues. Each one holds that check-in's deadline
+   * at least ANSWER_GRACE_MS (50 s) past now, so a reply in progress never times out, but a phone that dies
+   * mid-answer still counts as missed ~50 s later.
+   */
+  answering?: string;
 }
 
 export interface SensorReport {

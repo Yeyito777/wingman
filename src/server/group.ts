@@ -3,6 +3,7 @@
 // climbs, every other member is alerted. Everything lives in memory only and is deleted when the night ends.
 
 import {
+  ANSWER_GRACE_MS,
   AWAY_WATCH_M,
   CHECKIN_PROMPTS,
   DEFAULT_GEOFENCE_M,
@@ -244,6 +245,7 @@ export class Group {
       if (typeof b.motion.activity === "string") m.activity = b.motion.activity;
     }
     if (b.interaction) m.lastInteractionAt = now;
+    if (typeof b.answering === "string") this.answering(m, b.answering, now);
     if (b.fall && typeof b.fall === "object") this.fall(m, now, Number(b.fall.peakG) || null);
   }
 
@@ -330,6 +332,16 @@ export class Group {
       }, 1500);
     }
     return c;
+  }
+
+  /** The member started (or is still) recording / typing a reply: hold the deadline while it's in progress. */
+  answering(m: Member, checkinId: string, now: number) {
+    const c = m.pendingCheckin;
+    if (!c || c.id !== checkinId || c.status !== "pending") return;
+    if (!c.answeringAt) this.log("checkin", `${m.name} is answering the check-in…`, m.id, now);
+    c.answeringAt = now;
+    m.lastInteractionAt = now;
+    c.deadline = Math.max(c.deadline, now + ANSWER_GRACE_MS);
   }
 
   /** Accept an answer (audio or text) for a pending check-in and score it. */

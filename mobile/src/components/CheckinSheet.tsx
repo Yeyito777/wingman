@@ -11,7 +11,7 @@ import { Animated, Easing, Platform, Pressable, TextInput, View } from "react-na
 import { SafeAreaView } from "react-native-safe-area-context";
 import { audioMode, chimeAndWait, play, tap } from "../services/alarm";
 import { speakFully } from "../services/voice";
-import { answerCheckin } from "../services/session";
+import { answerCheckin, sendSignals } from "../services/session";
 import { dispatch } from "../state/store";
 import { colors, font } from "../theme";
 import { KeyboardScreen } from "./KeyboardScreen";
@@ -32,6 +32,7 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const alive = useRef(true);
   const listening = useRef(false);
+  const answeringSent = useRef(0);
   /** still speaking the question: false once the user taps the mic or types (then a stopped utterance isn't retried) */
   const asking = useRef(true);
 
@@ -58,6 +59,14 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkin.id]);
 
+  /** Tell the server an answer is in progress (recording / typing), at most every 4 s: it holds the deadline. */
+  const markAnswering = () => {
+    const now = Date.now();
+    if (now - answeringSent.current < 4000) return;
+    answeringSent.current = now;
+    sendSignals({ answering: checkin.id, interaction: true });
+  };
+
   const stopTimer = () => {
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
@@ -82,10 +91,12 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
       return;
     }
     setPhase("listening");
+    markAnswering();
     const started = Date.now();
     let spoke = false;
     let lastVoice = started;
     timer.current = setInterval(() => {
+      markAnswering();
       const st = recorder.getStatus();
       const db = st.metering ?? -160;
       setLevel(Math.max(0, Math.min(1, (db + 55) / 45)));
@@ -117,6 +128,8 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
 
   async function submit(a: { text?: string; audio?: string; mime?: string; durationMs?: number }) {
     setPhase("thinking");
+    answeringSent.current = 0;
+    markAnswering(); // the upload itself can take a few seconds on a bad connection
     try {
       const r = await answerCheckin(checkin.id, a);
       if (!alive.current) return;
@@ -201,7 +214,10 @@ export function CheckinSheet({ checkin }: { checkin: Checkin }) {
                 <TextInput
                   autoFocus
                   value={typed}
-                  onChangeText={setTyped}
+                  onChangeText={(t) => {
+                    setTyped(t);
+                    if (t.trim()) markAnswering();
+                  }}
                   placeholder="Where are you, and who are you with?"
                   placeholderTextColor={colors.text3}
                   multiline

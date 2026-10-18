@@ -1,7 +1,8 @@
 // Group engine without a server: distances, fan-out targets, privacy and push routing.
 
 import { describe, expect, test } from "bun:test";
-import { Group, type GroupHooks } from "../src/server/group.ts";
+import { CANNED, Group, type GroupHooks } from "../src/server/group.ts";
+import { ANSWER_GRACE_MS } from "../src/shared/config.ts";
 import type { PushMessage } from "../src/server/push.ts";
 import { haversineM, offset } from "../src/shared/geo.ts";
 import type { ServerMsg } from "../src/shared/types.ts";
@@ -109,6 +110,65 @@ describe("group engine", () => {
     g.startWalk(me, 3_000);
     g.setFix(me, { ...offset(HERE, 5000, 90), accuracy: 20 }, 4_000);
     expect(g.venue!.lat).toBe(venue.lat);
+  });
+
+  describe("a check-in being answered doesn't time out", () => {
+    // A fall (30) triggers a check-in (60 s in real timers); missing it (+35) raises the alert.
+    const setup = () => {
+      const { g, add } = harness();
+      const [a] = [add("A"), add("B")];
+      g.fall(a, 10_000, 3.4);
+      const c = a.pendingCheckin!;
+      expect(c.deadline).toBe(10_000 + g.timers.checkinTimeoutMs);
+      /** tick once a second until `to`; returns when A's alert started (or null) */
+      const run = (from: number, to: number) => {
+        for (let t = from; t <= to; t += 1000) {
+          g.tick(t);
+          if (a.esc.stage > 0) return t;
+        }
+        return null;
+      };
+      return { g, a, c, run };
+    };
+
+    test("never started: missed at the normal timeout → alert", () => {
+      const { a, c, run } = setup();
+      expect(run(11_000, 69_000)).toBeNull();
+      expect(run(70_000, 75_000)).toBe(70_000);
+      expect(c.outcome).toBe("missed");
+      expect(a.esc.stage).toBe(1);
+    });
+
+    test("started answering, then submitted: no alert, even past the original deadline", async () => {
+      const { g, a, c, run } = setup();
+      expect(run(11_000, 50_000)).toBeNull();
+      for (let t = 55_000; t <= 115_000; t += 10_000) {
+        g.signals(a, { answering: c.id }, t); // recording / typing, a heartbeat every 10 s
+        expect(run(t - 9_000, t)).toBeNull();
+      }
+      expect(c.answeringAt).toBe(115_000);
+      expect(c.status).toBe("pending");
+      await g.answerCheckin(a, c.id, { text: CANNED.coherent, source: "typed", canned: true });
+      expect(c.outcome).toBe("ok");
+      expect(run(116_000, 300_000)).toBeNull();
+    });
+
+    test("started, then the phone went silent: alert ~50 s after the last activity (the cap)", () => {
+      const { g, a, c, run } = setup();
+      expect(run(11_000, 50_000)).toBeNull();
+      g.signals(a, { answering: c.id }, 50_000);
+      expect(c.deadline).toBe(50_000 + ANSWER_GRACE_MS);
+      expect(run(51_000, 99_000)).toBeNull();
+      expect(run(100_000, 110_000)).toBe(100_000);
+      expect(c.outcome).toBe("missed");
+    });
+
+    test("an answering signal for another (or a finished) check-in changes nothing", () => {
+      const { g, a, c } = setup();
+      g.signals(a, { answering: "c_other" }, 30_000);
+      expect(c.deadline).toBe(70_000);
+      expect(c.answeringAt).toBeUndefined();
+    });
   });
 });
 

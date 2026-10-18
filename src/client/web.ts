@@ -118,6 +118,15 @@ function member(c: string, me: { memberId: string; key: string }) {
       () => {
         const s = $("#send");
         if (s && c) s.onclick = () => act(`${base}/${me.memberId}/checkins/${c.id}/answer`, { text: ($("#ans") as HTMLInputElement).value });
+        // Typing an answer holds the check-in's deadline (the server gives 50 s past the last keystroke).
+        const ans = $("#ans") as HTMLInputElement | null;
+        let sentAt = 0;
+        if (ans && c)
+          ans.oninput = () => {
+            if (!ans.value.trim() || Date.now() - sentAt < 4000) return;
+            sentAt = Date.now();
+            ws.send({ t: "signals", answering: c.id, interaction: true });
+          };
       },
     );
     if (c && c.status === "pending" && spoken !== c.id) {

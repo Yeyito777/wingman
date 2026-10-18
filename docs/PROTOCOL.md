@@ -1,4 +1,4 @@
-# Wingman protocol (v2)
+# Wingman protocol (v3)
 
 The contract between the Wingman server and its clients: the native iPhone app (`mobile/`), the projector stage view
 and the minimal web fallback. Types live in [`shared/protocol.ts`](../shared/protocol.ts) (plain TS, no runtime
@@ -183,7 +183,9 @@ During their alert (stage ≥ 1) everything is revealed to the group. You always
 1. Server decides (cadence `checkinEveryMs`, suspicion at risk ≥ 25, alert at ≥ 60, a friend's "ping", or manual)
    and sends `{ t: "checkin", checkin }` to that member's sockets (+ push if backgrounded and a token is set).
    `MemberView.checkin` shows it to everyone (status `pending`).
-2. App speaks `checkin.prompt`, records up to ~10 s (iOS: `.m4a` AAC, 16–44.1 kHz mono is plenty).
+2. App speaks `checkin.prompt`, records up to ~10 s (iOS: `.m4a` AAC, 16–44.1 kHz mono is plenty). While recording
+   or typing, it sends `{ answering: "<checkin id>" }` signals (every ~5 s): the deadline is held 50 s past the last
+   one, so the answer in progress doesn't time out.
 3. App POSTs the answer. Server sets status `scoring`, Gemini listens to the audio (fallback: OpenAI transcription,
    then an offline heuristic), status `done` with `outcome`:
    - `ok` → clears earlier signals; resolves an active alert;
@@ -211,6 +213,11 @@ connected). The stage view is `/stage/:code?k=<stageKey>`. Simulated friends ans
 unless the storyline is driving them.
 
 ## CHANGELOG
+
+- **v3** (Oct 18 2026): `SignalBatch.answering` = the pending check-in's id while the user is recording or typing a
+  reply (send when the mic starts / the first key lands, then every ~5 s). Each one holds `Checkin.deadline` at least
+  50 s past now, so an answer in progress never times out, while a phone that dies mid-answer still counts as missed
+  ~50 s later. `Checkin.answeringAt` = the last such signal. Additive.
 
 - **v2** (Oct 17 2026): `MemberView.phone` (the member's own number from `MemberSetup.phone`, `""` if not given),
   visible to every member of the group so the alert takeover can offer "Call Maya"; `MemberSettingsRequest.phone`.

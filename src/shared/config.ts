@@ -33,6 +33,9 @@ export const DEMO_TIMERS: Timers = {
   probeCooldownMs: 20 * S,
 };
 
+/** A check-in being answered (recording / typing) can't time out until this long after the last "answering" signal. */
+export const ANSWER_GRACE_MS = 50_000;
+
 /** Distance thresholds (metres) beyond position uncertainty. */
 export const AWAY_WATCH_M = 150;
 export const AWAY_FAR_M = 300;
