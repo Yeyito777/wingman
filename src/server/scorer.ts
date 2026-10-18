@@ -94,6 +94,7 @@ export async function scoreCheckin(req: ScoreRequest, engines = availableEngines
       const fellBack = engine === "mock" && failed && req.audio && !req.text;
       const result: CheckinResult = { ...(fellBack ? unscored("the AI didn't respond in time") : normalize(raw)), engine, latencyMs: Math.round(performance.now() - t0) };
       if (failed) result.fallbackFrom = failed;
+      if (engine !== "mock") console.log(`[scorer] ${engine} · ${result.model} ${result.latencyMs} ms`);
       if (!failed) {
         if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value!);
         cache.set(key, result);
@@ -115,44 +116,89 @@ function run(engine: Engine, req: ScoreRequest): Promise<Raw> {
 
 // ---------- Gemini ----------
 
-// Lite first: ~2 s for a voice reply versus ~4-7 s for full Flash, which matters while someone waits.
-const GEMINI_DEFAULT_MODELS = ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.5-flash"];
-let geminiWorking: string | null = null;
+// Lite first: ~2 s for a voice reply versus ~4-7 s for full Flash, which matters while someone waits. Pinned first (the
+// alias resolved to it on Oct 18), the alias in case the pin is retired, then the previous lite, then full Flash.
+const GEMINI_DEFAULT_MODELS = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.1-flash-lite", "gemini-flash-latest"];
+/** Models that answered 404 (retired / not offered to this key): skipped from then on. */
+const geminiGone = new Set<string>();
 
 export function geminiModels(env = process.env): string[] {
-  const first = env.GEMINI_MODEL?.trim() || geminiWorking;
-  return [...new Set([...(first ? [first] : []), ...GEMINI_DEFAULT_MODELS])];
+  const first = env.GEMINI_MODEL?.trim();
+  return [...new Set([...(first ? [first] : []), ...GEMINI_DEFAULT_MODELS])].filter((m) => !geminiGone.has(m));
 }
 
-async function gemini(req: ScoreRequest): Promise<Raw> {
+/** A healthy reply lands in ~1.5-2.5 s, but about 1 in 20 identical requests just hangs (no status, no bytes; measured
+ *  Oct 18). If the request in flight hasn't answered by now, the next model is asked alongside it. */
+function hedgeMs() {
+  return Number(process.env.GEMINI_HEDGE_MS) || 3000;
+}
+
+/** Hedged: one request at a time normally; on an error, or no answer within hedgeMs(), the next model starts alongside
+ *  the ones still in flight. The first good answer wins and the rest are aborted; everything is aborted at AI_TIMEOUT_MS. */
+function gemini(req: ScoreRequest): Promise<Raw> {
   const key = process.env.GEMINI_API_KEY!;
   const models = geminiModels();
   const parts: any[] = [{ text: userText(req) }];
   if (req.audio) parts.push({ inline_data: { mime_type: geminiMime(req.audio.mime), data: Buffer.from(req.audio.data).toString("base64") } });
-  const body = {
+  const body = JSON.stringify({
     system_instruction: { parts: [{ text: SYSTEM }] },
     contents: [{ role: "user", parts }],
     generationConfig: { temperature: 0, responseMimeType: "application/json", responseSchema: SCHEMA },
-  };
-  let lastErr = "";
-  for (const model of models) {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify(body),
-    });
-    if (res.status === 404 || res.status === 429 || res.status >= 500) {
-      // Unknown model, rate limit, or overloaded: try the next model before giving up on Gemini.
-      lastErr = `${model}: HTTP ${res.status}`;
-      continue;
-    }
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
-    const json: any = await res.json();
-    const text = json?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "";
-    geminiWorking = model;
-    return { ...JSON.parse(text), model };
-  }
-  throw new Error(lastErr);
+  });
+  const ctrl = new AbortController();
+  return new Promise((resolve, reject) => {
+    let next = 0;
+    let inFlight = 0;
+    let done = false;
+    let hedge: ReturnType<typeof setTimeout> | undefined;
+    const errs: string[] = [];
+    const finish = (fn: () => void) => {
+      if (done) return;
+      done = true;
+      clearTimeout(hedge);
+      clearTimeout(deadline);
+      ctrl.abort();
+      fn();
+    };
+    const deadline = setTimeout(() => finish(() => reject(new Error(`no answer in ${AI_TIMEOUT_MS} ms (${[...errs, `${inFlight} silent`].join("; ")})`))), AI_TIMEOUT_MS);
+    const launch = () => {
+      clearTimeout(hedge);
+      if (done || next >= models.length) return;
+      const model = models[next++]!;
+      inFlight++;
+      if (next < models.length) {
+        hedge = setTimeout(() => {
+          console.warn(`[scorer] gemini: ${model} silent after ${hedgeMs()} ms, also asking ${models[next]}`);
+          launch();
+        }, hedgeMs());
+      }
+      geminiOnce(model, key, body, ctrl.signal).then(
+        (raw) => finish(() => resolve(raw)),
+        (err) => {
+          inFlight--;
+          if (done) return;
+          errs.push(`${model}: ${String((err as Error)?.message ?? err).slice(0, 80)}`);
+          if (next < models.length) launch();
+          else if (inFlight === 0) finish(() => reject(new Error(errs.join("; "))));
+        },
+      );
+    };
+    launch();
+  });
+}
+
+async function geminiOnce(model: string, key: string, body: string, signal: AbortSignal): Promise<Raw> {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-goog-api-key": key },
+    body,
+    signal,
+  });
+  if (res.status === 404) geminiGone.add(model);
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text().catch(() => "")).slice(0, 120)}`);
+  const json: any = await res.json();
+  const text = json?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "";
+  return { ...JSON.parse(text), model };
 }
 
 /** iOS records AAC in an MPEG-4 container (.m4a) and labels it a few different ways; Gemini wants audio/mp4. */

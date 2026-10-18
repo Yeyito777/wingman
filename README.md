@@ -76,7 +76,7 @@ All optional. With none set, Wingman runs fully offline with a deterministic moc
 | `PORT` | HTTP port (default 3000) |
 | `PUBLIC_URL` | Base URL for share links and SMS (auto-detected from the request otherwise; works through tunnels) |
 | `GEMINI_API_KEY` | **Primary AI scorer.** The voice reply goes to Gemini as audio |
-| `GEMINI_MODEL` | Override; default tries `gemini-flash-lite-latest` (~2 s), then `gemini-flash-latest`, then `gemini-3.5-flash` |
+| `GEMINI_MODEL` | Override; default tries `gemini-3.5-flash-lite` (~2 s), then `gemini-flash-lite-latest`, `gemini-3.1-flash-lite`, `gemini-flash-latest`. Hedged: if a request hasn't answered in `GEMINI_HEDGE_MS` (3000) or errors, the next model is asked alongside it |
 | `OPENAI_API_KEY` | Fallback scorer: transcription (`gpt-4o-mini-transcribe`) + `gpt-4o-mini` |
 | `OPENAI_MODEL`, `OPENAI_TRANSCRIBE_MODEL` | Overrides for the fallback |
 | `SCORER` | Force `gemini` / `openai` / `mock` first |
