@@ -308,7 +308,7 @@ function start() {
     onView: render,
     onMsg: (m: ServerMsg) => {
       if (m.t === "ack") toast(`${m.ack.byName} is on the way to ${m.alert.memberName}`);
-      if (m.t === "member") toast(`${m.name} ${m.event === "joined" ? "joined" : "left"} the group`);
+      if (m.t === "member") toast(m.event === "joined" ? `${m.name} joined the group` : `${m.name} headed home`);
     },
     onEnded: () => (app.innerHTML = `<div class="wrap"><h1>The night has ended</h1><p class="muted">All of the group's data was deleted.</p></div>`),
   });

@@ -349,7 +349,8 @@ export function startServer(opts: AppOptions = {}) {
         POST: api("self", (g, _req, m) => {
           publish(g, m!.id, { t: "left" });
           g.removeMember(m!, Date.now());
-          if ([...g.members.values()].every((x) => x.simulated)) endGroup(g, "everyone left");
+          // A demo group keeps running for its simulated friends, so the phone can rejoin later.
+          if (!g.demo && [...g.members.values()].every((x) => x.simulated)) endGroup(g, "everyone left");
           else afterAction(g);
           return json({ ok: true });
         }),
